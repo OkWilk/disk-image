@@ -1,0 +1,5 @@
+notes
+.coverage
+*.ipynb
+*.pyc
+*/__pycache__/*
