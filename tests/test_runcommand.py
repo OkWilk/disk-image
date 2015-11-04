@@ -1,12 +1,10 @@
-import sys
-sys.path.append('../src')
-
 import unittest
 from errno import EIO
 from unittest.mock import Mock, patch
 from threading import Thread
-from runcommand import Execute, OutputParser
+from src.runcommand import Execute, OutputParser
 from time import sleep
+
 
 class RunCommandTest(unittest.TestCase):
 
@@ -33,7 +31,7 @@ class RunCommandTest(unittest.TestCase):
 
     def test_execute_with_pty(self):
         execute = Execute('python3 ./helpers/listprint.py 5 test test2',
-            shell=True, use_pty=True)
+                          shell=True, use_pty=True)
         t = Thread(target=execute.run)
         t.start()
         sleep(0.3)
@@ -61,34 +59,35 @@ class RunCommandTest(unittest.TestCase):
 
     def test_poll_process(self):
         execute = Execute(['echo'])
-        self.assertEqual(execute.poll(), -1) # process never started
+        self.assertEqual(execute.poll(), -1)  # process never started
         execute.process = Mock()
         execute.process.poll.return_value = None
-        self.assertEqual(execute.poll(), None) # process still running
+        self.assertEqual(execute.poll(), None)  # process still running
         execute.process.poll.return_value = 0
-        self.assertEqual(execute.poll(), 0) # process finished
+        self.assertEqual(execute.poll(), 0)  # process finished
 
-    @patch('runcommand.os')
+    @patch('src.runcommand.os')
     def test_EIO_do_not_raise_exception(self, mock_os):
         execute = Execute(['echo'], use_pty=True)
-        mock_os.read.side_effect=IOError(EIO, None)
+        mock_os.read.side_effect = IOError(EIO, None)
         execute.run()
         self.assertTrue(mock_os.read.called)
 
-    @patch('runcommand.os')
+    @patch('src.runcommand.os')
     def test_non_EIO_raises_exception(self, mock_os):
         execute = Execute(['echo'], use_pty=True)
-        mock_os.read.side_effect=IOError("test")
+        mock_os.read.side_effect = IOError("test")
         with self.assertRaises(IOError):
             execute.run()
 
-    @patch('runcommand.os')
+    @patch('src.runcommand.os')
     def test_exit_process_when_no_more_output_is_generated(self, mock_os):
         mock_os.read.return_value = ""
         execute = Execute(['echo'], use_pty=True)
         execute.run()
         self.assertTrue(mock_os.close.called)
         self.assertNotEqual(execute.poll(), None)
+
 
 class OutputParserTest(unittest.TestCase):
 

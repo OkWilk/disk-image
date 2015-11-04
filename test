@@ -1,5 +1,3 @@
 #!/bin/bash
-pushd ./tst/ >/dev/null
-coverage run --source ../src -m unittest
+coverage run --source ./src -m unittest
 coverage report -m --fail-under 95
-popd >/dev/null

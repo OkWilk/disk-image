@@ -10,6 +10,7 @@ import os
 import pty
 import subprocess
 
+
 class OutputParser:
     """The base class for parsing modules used with Execute class"""
     def __init__(self):
@@ -19,13 +20,14 @@ class OutputParser:
         """Parses data received and saves it in output variable"""
         self.output = data
 
+
 class Execute:
     """Command execution wrapper that provides support for both, line-buffering
     through tty emulation and blocking modes.
     """
 
     def __init__(self, command:list, output_parser:'OutputParser'=OutputParser(),
-                use_pty:bool=False, shell:bool=False, buffer_size:int=1024):
+                 use_pty:bool=False, shell:bool=False, buffer_size:int=1024):
         """Add the command execution parameters to the object.
         command - the command to be executed.
         output_parser - the output parsing module to use.
@@ -82,8 +84,8 @@ class Execute:
         """
         master_fd, slave_fd = pty.openpty()
         self.process = subprocess.Popen(self.command, stdin=slave_fd,
-            stdout=slave_fd, stderr=subprocess.STDOUT, close_fds=True,
-            shell=self.shell)
+                                        stdout=slave_fd, stderr=subprocess.STDOUT,
+                                        close_fds=True, shell=self.shell)
         os.close(slave_fd)
         try:
             while True:
@@ -91,10 +93,10 @@ class Execute:
                     data = os.read(master_fd, self.buffer_size)
                 except OSError as e:
                     if e.errno == errno.EIO:
-                        break # EIO == EOF on some systems
+                        break  # EIO == EOF on some systems
                     raise
                 else:
-                    if not data: # EOF
+                    if not data:  # EOF
                         break
                     self.output_parser.parse(data.decode("utf-8"))
         finally:
@@ -104,7 +106,7 @@ class Execute:
     def _run_without_pty(self):
         """Executes command and passes standard output to the output_parser."""
         self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE,
-            shell=self.shell)
+                                        shell=self.shell)
         out, err = self.process.communicate()
         self.output_parser.parse(out)
         return self.kill()
