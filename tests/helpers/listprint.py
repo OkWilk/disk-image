@@ -6,4 +6,3 @@ for arg in sys.argv:
     sleep(delay)
     print(str(arg))
     sleep(delay)
-    
