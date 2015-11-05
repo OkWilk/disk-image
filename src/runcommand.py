@@ -108,5 +108,5 @@ class Execute:
         self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE,
                                         shell=self.shell)
         out, err = self.process.communicate()
-        self.output_parser.parse(out)
+        self.output_parser.parse(out.decode("utf-8"))
         return self.kill()

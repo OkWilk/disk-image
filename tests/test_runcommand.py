@@ -55,7 +55,7 @@ class RunCommandTest(unittest.TestCase):
         parser = Mock()
         execute = Execute(['echo', 'test'], parser)
         execute.run()
-        parser.parse.assert_called_with(bytes('test\n','utf-8'))
+        parser.parse.assert_called_with('test\n')
 
     def test_poll_process(self):
         execute = Execute(['echo'])
