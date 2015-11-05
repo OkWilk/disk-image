@@ -2,7 +2,7 @@ import unittest
 from errno import EIO
 from unittest.mock import Mock, patch
 from threading import Thread
-from src.runcommand import Execute, OutputParser
+from src.systools.runcommand import Execute, OutputParser
 from time import sleep
 
 
@@ -66,21 +66,21 @@ class RunCommandTest(unittest.TestCase):
         execute.process.poll.return_value = 0
         self.assertEqual(execute.poll(), 0)  # process finished
 
-    @patch('src.runcommand.os')
+    @patch('src.systools.runcommand.os')
     def test_EIO_do_not_raise_exception(self, mock_os):
         execute = Execute(['echo'], use_pty=True)
         mock_os.read.side_effect = IOError(EIO, None)
         execute.run()
         self.assertTrue(mock_os.read.called)
 
-    @patch('src.runcommand.os')
+    @patch('src.systools.runcommand.os')
     def test_non_EIO_raises_exception(self, mock_os):
         execute = Execute(['echo'], use_pty=True)
         mock_os.read.side_effect = IOError("test")
         with self.assertRaises(IOError):
             execute.run()
 
-    @patch('src.runcommand.os')
+    @patch('src.systools.runcommand.os')
     def test_exit_process_when_no_more_output_is_generated(self, mock_os):
         mock_os.read.return_value = ""
         execute = Execute(['echo'], use_pty=True)
