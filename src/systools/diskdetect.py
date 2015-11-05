@@ -1,54 +1,86 @@
 from src.runcommand import Execute, OutputParser
 import re
+import logging
+
+_LSBLK_COLUMNS = ['KNAME', 'TYPE', 'FSTYPE', 'SIZE']
 
 
-class DiskParser(OutputParser):
-    def __init__(self, ignore_list=['loop','rom']):
+class _DiskParser(OutputParser):
+
+    def __init__(self, ignore_list:list=['loop', 'rom']):
+        """Add parsing configuration to the object.
+        ignore_list - a list of device types to be ignored: drive, part, loop, rom
+        """
         self.ignore_list = ignore_list
         self.output = {}
-        self._keywords = ['NAME', 'TYPE', 'FSTYPE', 'SIZE']
 
-    def parse(self, data):
+    def parse(self, data:str):
+        """Parses output of lsblk list format into a dictionary of devices
+        and their respective partitions. The result of this operation will be
+        stored in the output variable.
+        """
         output_lines = data.split('\n')
+        parsed_lines = list()
         for line in output_lines:
-            self._extract_pairs(line)
+            if(line):
+                extracted = self._extract_pairs_to_dict(line)
+                parsed_lines.append(extracted)
+        devices = self._group_by_device(parsed_lines)
+        devices = self._remove_ignored_device_types(devices)
+        self.output = devices
 
-    def _extract_pairs(self, string):
-        d = dict()
-        for key in self._keywords:
+    def _extract_pairs_to_dict(self, line:str) -> dict:
+        """Extracts key value pairs from the string and returns them as a
+        dictionary. The device name key is required. In case of line that does
+        not contain KNAME key ValueError will be raised.
+        """
+        extracted = dict()
+        for keyword in _LSBLK_COLUMNS:
             try:
-                pair = re.search(r'\b' + key + r'\b="[^"]*"', string).group(0)
-                d[key] = pair.split('=')[1].strip().strip('"')
+                pair = re.search(r'\b' + keyword + r'\b="[^"]*"', line).group(0)
+                key, value = pair.split('=')
+                extracted[keyword] = value.strip().strip('"')
             except AttributeError:
-                pass  # The line did not contain required keys
-        print(str(d))
+                if(keyword == 'KNAME'):
+                    logging.error('Cannot detect drive name in the line: "' +
+                                  line + '".')
+                    raise ValueError()
+                else:
+                    pass  # The line did not contain secondary key
+        return extracted
 
-def detect_disks():
-    """Detects disk drives recognised by the operating system"""
-    command = ['lsblk', '--output', 'NAME,TYPE,FSTYPE,SIZE', '--pairs', '--bytes']
-    runner = Execute(command,DiskParser())
+    def _group_by_device(self, extracted:list) -> dict:
+        """Processes the list of drives and partitions in order to group them."""
+        result = dict()
+        for record in extracted:
+            if not(record['TYPE'] == 'part'):
+                partitions = list()
+                name = record['KNAME']
+                result[name] = {
+                    'size': record['SIZE'],
+                    'type': record['TYPE'],
+                    'partitions': partitions
+                }
+            elif(record['TYPE'] == 'part' and name in record['KNAME']):
+                partition = {
+                    'name': record['KNAME'],
+                    'size': record['SIZE'],
+                    'fs': record['FSTYPE']
+                }
+                partitions.append(partition)
+        return result
+
+    def _remove_ignored_device_types(self, devices:dict) -> dict:
+        """Returns a new dictionary without the ignored devices specified
+        in the ignored_devices list"""
+        return {i:devices[i] for i in devices if devices[i]['type']
+                not in self.ignore_list}
+
+
+def detect_disks() -> dict:
+    """Detects disks recognised by the operating system and returns them along
+    with additional information such as size, partitions and file systems."""
+    command = ['lsblk', '--output', ','.join(_LSBLK_COLUMNS), '--pairs', '--bytes']
+    runner = Execute(command, _DiskParser())
     runner.run()
     return runner.output()
-"""
-format:
-{
-    disk1: {
-        name: 'sda',
-        type: 'disk'
-        partitions: {
-            part1: {
-                name: 'sda1',
-                fs: 'ext3'
-                }
-            part2: {
-                name: 'sda2',
-                fs: 'swap'
-                }
-            }
-        }
-    disk2: {
-        name: 'sdb',
-        type: 'disk'
-        }
-}
-"""
