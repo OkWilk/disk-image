@@ -131,7 +131,8 @@ class PartcloneOutputParser(OutputParser):
             pprint(self.output)
 
     def _check_for_errors(self, string):
-        if 'File exists (17)' in string:
+        string = string.lower()
+        if 'file exists (17)' in string:
             raise ImageError(string)
             logging.error(string)
 

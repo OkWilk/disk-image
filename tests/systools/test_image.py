@@ -84,6 +84,19 @@ class ImageTest(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.clone.restore()
 
-    def test_run_backup(self):
-        clone = image.PartitionImage('sdb', '/tmp/', overwrite=True)
-        clone.backup()
+    # def test_run_backup(self):
+    #     clone = image.PartitionImage('sdb', '/tmp/', overwrite=True)
+    #     clone.backup()
+
+
+class PartcloneOutputParserTest(unittest.TestCase):
+
+    def setUp(self):
+        self.parser = image.PartcloneOutputParser()
+
+    @patch('src.systools.image.logging')
+    def test_check_for_errors(self, log_mock):
+        string = 'open target fail /tmp/part1.img: file exists (17)'
+        # with self.assertRaises(image.ImageError):
+        self.parser._check_for_errors(string)
+        self.assertEqual(1, log_mock.error.call_count)
