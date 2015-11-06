@@ -10,14 +10,14 @@ class RunCommandTest(unittest.TestCase):
 
     def test_create_default_execute_object(self):
         execute = Execute(['echo'])
-        self.assertEqual(execute.command, ['echo'])
+        self.assertEqual(['echo'], execute.command)
         self.assertTrue(execute.output_parser)
         self.assertFalse(execute.shell)
         self.assertFalse(execute.use_pty)
 
     def test_create_execute_object_with_shell_enabled(self):
         execute = Execute('echo', shell=True)
-        self.assertEqual(execute.command, 'echo')
+        self.assertEqual('echo', execute.command)
         self.assertTrue(execute.shell)
 
     def test_create_execute_object_with_pty_enabled(self):
@@ -59,12 +59,12 @@ class RunCommandTest(unittest.TestCase):
 
     def test_poll_process(self):
         execute = Execute(['echo'])
-        self.assertEqual(execute.poll(), -1)  # process never started
+        self.assertEqual(-1, execute.poll())  # process never started
         execute.process = Mock()
         execute.process.poll.return_value = None
-        self.assertEqual(execute.poll(), None)  # process still running
+        self.assertEqual(None, execute.poll())  # process still running
         execute.process.poll.return_value = 0
-        self.assertEqual(execute.poll(), 0)  # process finished
+        self.assertEqual(0, execute.poll())  # process finished
 
     @patch('src.systools.runcommand.os')
     def test_EIO_do_not_raise_exception(self, mock_os):
@@ -86,7 +86,7 @@ class RunCommandTest(unittest.TestCase):
         execute = Execute(['echo'], use_pty=True)
         execute.run()
         self.assertTrue(mock_os.close.called)
-        self.assertNotEqual(execute.poll(), None)
+        self.assertNotEqual(None, execute.poll())
 
 
 class OutputParserTest(unittest.TestCase):
@@ -95,7 +95,7 @@ class OutputParserTest(unittest.TestCase):
         parser = OutputParser()
         test_str = 'test string!'
         parser.parse(test_str)
-        self.assertEqual(parser.output, test_str)
+        self.assertEqual(test_str, parser.output)
 
 if __name__ == '__main__':
     unittest.main()
