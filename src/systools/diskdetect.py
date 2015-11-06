@@ -1,3 +1,7 @@
+"""Author: Oktawiusz Wilk
+Date: 05/11/2015
+"""
+
 from src.systools.runcommand import Execute, OutputParser
 import re
 import logging
@@ -6,6 +10,7 @@ _LSBLK_COLUMNS = ['KNAME', 'TYPE', 'FSTYPE', 'SIZE']
 
 
 class _DiskParser(OutputParser):
+    """The specialised parsing class to be used with lsblk list outputs."""
 
     def __init__(self, ignore_list:list=['loop', 'rom']):
         """Add parsing configuration to the object.
@@ -40,7 +45,7 @@ class _DiskParser(OutputParser):
                 pair = re.search(r'\b' + keyword + r'\b="[^"]*"', line).group(0)
                 key, value = pair.split('=')
                 extracted[keyword] = value.strip().strip('"')
-            except AttributeError:
+            except Exception:
                 if(keyword == 'KNAME'):
                     logging.error('Cannot detect drive name in the line: "' +
                                   line + '".')
