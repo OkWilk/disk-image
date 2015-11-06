@@ -9,7 +9,7 @@ import logging
 _LSBLK_COLUMNS = ['KNAME', 'TYPE', 'FSTYPE', 'SIZE']
 
 
-class _DiskParser(OutputParser):
+class _LsblkOutputParser(OutputParser):
     """The specialised parsing class to be used with lsblk list outputs."""
 
     def __init__(self, ignore_list:list=['loop', 'rom']):
@@ -86,6 +86,6 @@ def detect_disks() -> dict:
     """Detects disks recognised by the operating system and returns them along
     with additional information such as size, partitions and file systems."""
     command = ['lsblk', '--output', ','.join(_LSBLK_COLUMNS), '--pairs', '--bytes']
-    runner = Execute(command, _DiskParser())
+    runner = Execute(command, _LsblkOutputParser())
     runner.run()
     return runner.output()

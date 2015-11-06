@@ -84,19 +84,32 @@ class ImageTest(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.clone.restore()
 
-    # def test_run_backup(self):
-    #     clone = image.PartitionImage('sdb', '/tmp/', overwrite=True)
-    #     clone.backup()
-
 
 class PartcloneOutputParserTest(unittest.TestCase):
 
     def setUp(self):
-        self.parser = image.PartcloneOutputParser()
+        self.parser = image._PartcloneOutputParser()
 
     @patch('src.systools.image.logging')
     def test_check_for_errors(self, log_mock):
         string = 'open target fail /tmp/part1.img: file exists (17)'
-        # with self.assertRaises(image.ImageError):
-        self.parser._check_for_errors(string)
+        with self.assertRaises(image.ImageError):
+            self.parser._check_for_errors(string)
         self.assertEqual(1, log_mock.error.call_count)
+
+    def test_parse(self):
+        base_string = 'Elapsed: 00:01:22, Remaining: 00:01:20, Completed: 50.20%,'
+        self._parse_and_assert(base_string + '816.85mb/min', '00:01:22',
+                               '00:01:20', '50.20%', '816.85mb/min')
+        self._parse_and_assert(base_string + 'Rate: 816.85MB/min, ',
+                               '00:01:22', '00:01:20', '50.20%', '816.85mb/min')
+
+    @patch('src.systools.image.logging')
+    def test_parse_checks_for_errors(self, log_mock):
+        with self.assertRaises(image.ImageError):
+            self.parser.parse('open target fail /tmp/part1.img: file exists (17)')
+
+    def _parse_and_assert(self, string, elapsed, remaining, completed, rate):
+        self.parser.parse(string)
+        self.assertEqual({'elapsed': elapsed, 'remaining': remaining,
+                          'completed': completed, 'rate': rate}, self.parser.output)

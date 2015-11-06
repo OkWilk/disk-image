@@ -27,9 +27,9 @@ class PartitionImage:
         'raw': 'partclone.dd',
     }
 
-    def __init__(self, disk:str, dir:str, overwrite=False, rescue=False,
-                 space_check=True, fs_check=True, crc_check=True, force=False,
-                 refresh_delay=5, verbose=False):
+    def __init__(self, disk:str, dir:str, overwrite:bool=False, rescue:bool=False,
+                 space_check:bool=True, fs_check:bool=True, crc_check:bool=True,
+                 force:bool=False, refresh_delay:int=5, verbose:bool=False):
         self.disk = disk
         self.disk_info = self._get_disk_info(disk)
         # TODO: add exception if disk info cannot be retrieved
@@ -50,28 +50,43 @@ class PartitionImage:
         return detect_disks()[disk]
 
     def backup(self):
+        """Creates image backup for each of the partitions on the designated drive"""
         for partition in self.disk_info['partitions']:
             source = '/dev/' + partition['name']
             target = self.dir + partition['name'].replace(self.disk, 'part') + '.img'
             fs = partition['fs']
             command = self._backup_command(source, target, fs)
-            runner = Execute(command, PartcloneOutputParser(), use_pty=True)
-            runner.run()
+            runner = Execute(command, _PartcloneOutputParser(), use_pty=True)
+            runner.run()  # TODO: raise error in case of any issues
 
     def restore(self):
+        """Restores image backups to the designated drive"""
         raise NotImplementedError
 
     def _backup_command(self, source:str, target:str, fs:str):
+        """Creates a backup command for specified partition
+        source - the partition to be imaged eg. /dev/sdb1
+        target - file for partition image eg. /tmp/part1.img
+        fs - filesystem to be imaged, this is used to select appropriate
+             partclone version.
+        """
         command = self._build_command(source, target, fs)
         command.append('-c')  # create backup
         return command
 
     def _restore_command(self, source:str, target:str, fs:str):
+        """Creates a restore command for specified partition
+        source - the file containing partition image eg. /tmp/part1.img
+        target - the partition for the image to be applied to eg. /dev/sdb1
+        fs - filesystem to be imaged, this is used to select appropriate
+             partclone version.
+        """
         command = self._build_command(source, target, fs)
         command.append('-r')  # restore backup
         return command
 
     def _build_command(self, source:str, target:str, fs:str):
+        """Builds the generic part of the partclone command."""
         command = list()
         command.append(self._select_command_by_fs(fs))
         command.extend(self._config_to_command_parameters())
@@ -82,12 +97,19 @@ class PartitionImage:
             command.extend(['-o', target])
         return command
 
-    def _select_command_by_fs(self, fs) -> str:
+    def _select_command_by_fs(self, fs:str):
+        """Selects appropriate partclone version for the filesystem.
+        Unrecognised filesystems will be treated as raw images and supported
+        with use of partclone.dd
+        """
         if fs not in self._fs_to_command:
             fs = 'raw'
         return self._fs_to_command[fs]
 
-    def _config_to_command_parameters(self) -> list:
+    def _config_to_command_parameters(self):
+        """Parses configuration initialised when this class is created into the
+        specific partclone switches.
+        """
         command = list()
         if self.config['rescue']:
             command.append('-R')
@@ -106,14 +128,15 @@ class PartitionImage:
         return command
 
 
-class PartcloneOutputParser(OutputParser):
+class _PartcloneOutputParser(OutputParser):
     _valid_keys = ['elapsed', 'remaining', 'completed', 'rate']
 
     def __init__(self):
         self.output = None
-        self.output_dict = {}
+        self._output_dict = {}
 
     def parse(self, data):
+        """Processes data from the command output and saves the result as output."""
         raw_output = data.replace("\x1b[A","").lower()
         self._check_for_errors(raw_output)
         raw_output = raw_output.split(',')
@@ -123,19 +146,20 @@ class PartcloneOutputParser(OutputParser):
                     key = key.strip()
                     value = value.strip()
                     if key in self._valid_keys:
-                        self.output_dict[key] = value
+                        self._output_dict[key] = value
                 elif '/min' in item:
-                    self.output_dict['rate'] = item.strip()
-        if self.output_dict:
-            self.output = self.output_dict
-            pprint(self.output)
+                    self._output_dict['rate'] = item.strip()
+        if self._output_dict:
+            self.output = self._output_dict
 
     def _check_for_errors(self, string):
+        """Tests the output string for error messages and processes them."""
         string = string.lower()
         if 'file exists (17)' in string:
-            raise ImageError(string)
             logging.error(string)
+            raise ImageError(string)
 
 
 class ImageError(Exception):
+    """Raised in case of backup and restoration issues."""
     pass

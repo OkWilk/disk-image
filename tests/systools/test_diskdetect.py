@@ -6,7 +6,7 @@ import src.systools.diskdetect as diskdetect
 class DiskDetectTest(unittest.TestCase):
 
     def setUp(self):
-        self.parser = diskdetect._DiskParser()
+        self.parser = diskdetect._LsblkOutputParser()
 
     def test_detect_disks(self):
         result = diskdetect.detect_disks()
