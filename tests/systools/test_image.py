@@ -13,6 +13,6 @@ class ImageTest(unittest.TestCase):
             runner = Execute([command, '-v']).run()
             self.assertEqual(runner, 0)
 
-    def test_image_pendrive(self):
-        clone = image.PartitionImage('sdb', '/tmp/',overwrite=True,refresh_delay=2,log=True)
-        clone.backup()
+    # def test_image_pendrive(self):
+    #     clone = image.PartitionImage('sdb', '/tmp/',overwrite=True,refresh_delay=2,log=True)
+    #     clone.backup()
