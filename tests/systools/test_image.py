@@ -34,6 +34,15 @@ class ImageTest(unittest.TestCase):
         self.assertEqual(self.clone._fs_to_command['raw'],
                          self.clone._select_command_by_fs('invalid'))
 
+    def test_init_status(self):
+        self.assertTrue(self.clone.CURRENT_PARTITION in self.clone._status)
+        self.assertTrue('sda1' in self.clone._status)
+        self.assertEqual(self.clone.STATUS_PENDING, self.clone._status['sda1']['status'])
+
+    def test_get_status(self):
+        self.assertTrue('sda1' in self.clone.get_status())
+        self.assertTrue(self.clone.CURRENT_PARTITION in self.clone.get_status())
+
     @patch('src.systools.image.detect_disks')
     def test_config_to_command_parameters(self, detect_mock):
         detect_mock.return_value = {'sda': {'partitions':
@@ -76,9 +85,16 @@ class ImageTest(unittest.TestCase):
     def test_backup(self, exec_class):
         exec_mock = Mock()
         exec_class.return_value = exec_mock
+        exec_mock.output.return_value = {
+            "completed": "100.00%",
+            "elapsed": "00:00:15",
+            "rate": "817.66mb/min",
+            "remaining": "00:00:00",
+        }
         self.clone.backup()
         self.assertEqual(1, exec_mock.run.call_count)
         self.assertEqual(1, exec_class.call_count)
+        self.assertEqual(self.clone.STATUS_FINISHED, self.clone._status['sda1']['status'])
 
     def test_restore(self):
         with self.assertRaises(NotImplementedError):

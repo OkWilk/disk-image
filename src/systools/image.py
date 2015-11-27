@@ -2,8 +2,8 @@
 Date: 05/11/2015
 """
 import logging
-from src.systools.diskdetect import detect_disks
-from src.systools.runcommand import OutputParser, Execute
+from .diskdetect import detect_disks
+from .runcommand import OutputParser, Execute
 from pprint import pprint
 
 
@@ -13,6 +13,12 @@ class PartitionImage:
     This class can be used to setup, start and monitor imaging procedure for
     file systems supported by partclone project.
     """
+
+    CURRENT_PARTITION = 'current_partition'
+    STATUS_PENDING = 'pending'
+    STATUS_RUNNING = 'running'
+    STATUS_FINISHED = 'finished'
+    STATUS_ERROR = 'error'
 
     _fs_to_command = {  # TODO: add remaining filesystems (!HFS+!)
         'ntfs': 'partclone.ntfs',
@@ -44,24 +50,51 @@ class PartitionImage:
             'refresh_delay': refresh_delay,
             'verbose': verbose,
         }
+        self._status = {}
+        self.current_partition = ""
+        self._init_status()
+
+    def get_status(self):
+        """Returns updated status for the executed process."""
+        self._update_status()
+        return self._status
+
+    def backup(self):
+        """Creates image backup for each of the partitions on the designated drive"""
+        for partition in self.disk_info['partitions']:
+            self.current_partition = partition['name']
+            self._status[self.current_partition] = {}
+            source = '/dev/' + self.current_partition
+            target = self.dir + self.current_partition.replace(self.disk, 'part') + '.img'
+            fs = partition['fs']
+            command = self._backup_command(source, target, fs)
+            self._runner = Execute(command, _PartcloneOutputParser(), use_pty=True)
+            self._status[self.current_partition]['status'] = self.STATUS_RUNNING
+            self._runner.run()
+            self._update_status()
+            self._status[self.current_partition]['status'] = self.STATUS_FINISHED
+
+    def restore(self):
+        """Restores image backups to the designated drive"""
+        raise NotImplementedError
 
     def _get_disk_info(self, disk:str):
         """Retrieves information regarding the specified disk."""
         return detect_disks()[disk]
 
-    def backup(self):
-        """Creates image backup for each of the partitions on the designated drive"""
+    def _init_status(self):
+        """Initializes the status information with all partitions detected for
+        the target disk. The status for each partition is set to pending."""
+        self._status['current_partition'] = self.current_partition
         for partition in self.disk_info['partitions']:
-            source = '/dev/' + partition['name']
-            target = self.dir + partition['name'].replace(self.disk, 'part') + '.img'
-            fs = partition['fs']
-            command = self._backup_command(source, target, fs)
-            runner = Execute(command, _PartcloneOutputParser(), use_pty=True)
-            runner.run()  # TODO: raise error in case of any issues
+            self._status[partition['name']] = {'status': self.STATUS_PENDING}
 
-    def restore(self):
-        """Restores image backups to the designated drive"""
-        raise NotImplementedError
+    def _update_status(self):
+        """Retrieves newest output from output parser and includes it with the
+        status information."""
+        if self.current_partition and self._runner and self._runner.output():
+            self._status['current_partition'] = self.current_partition
+            self._status[self.current_partition].update(self._runner.output())
 
     def _backup_command(self, source:str, target:str, fs:str):
         """Creates a backup command for specified partition
@@ -147,7 +180,7 @@ class _PartcloneOutputParser(OutputParser):
                     value = value.strip()
                     if key in self._valid_keys:
                         self._output_dict[key] = value
-                elif '/min' in item:
+                elif '/min' in item:  # some lines do not have 'rate: ' but still have '[MK]B/min'
                     self._output_dict['rate'] = item.strip()
         if self._output_dict:
             self.output = self._output_dict

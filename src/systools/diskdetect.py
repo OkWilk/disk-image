@@ -2,7 +2,7 @@
 Date: 05/11/2015
 """
 
-from src.systools.runcommand import Execute, OutputParser
+from .runcommand import Execute, OutputParser
 import re
 import logging
 

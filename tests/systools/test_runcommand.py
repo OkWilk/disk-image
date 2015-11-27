@@ -1,8 +1,8 @@
 import unittest
 from errno import EIO
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, mock_open
 from threading import Thread
-from src.systools.runcommand import Execute, OutputParser
+from src.systools.runcommand import Execute, OutputParser, OutputToFileConverter
 from time import sleep
 
 
@@ -96,6 +96,26 @@ class OutputParserTest(unittest.TestCase):
         test_str = 'test string!'
         parser.parse(test_str)
         self.assertEqual(test_str, parser.output)
+
+
+class OutputToFileConverterTest(unittest.TestCase):
+
+    def test_converter_sets_append_correctly(self):
+        converter = OutputToFileConverter('file.txt')
+        self.assertEqual('w', converter.mode)
+        converter = OutputToFileConverter('file.txt', append=True)
+        self.assertEqual('a', converter.mode)
+        self.assertEqual('file.txt', converter.file)
+
+    def test_output_is_written_to_file(self):
+        converter = OutputToFileConverter('file.txt')
+        data = 'some data'
+        mock = mock_open()
+        with patch('src.systools.runcommand.open', mock, create=True):
+            converter.parse(data)
+        self.assertEqual(data, converter.output)
+        handle = mock()
+        handle.write.assert_called_with(data)
 
 if __name__ == '__main__':
     unittest.main()
