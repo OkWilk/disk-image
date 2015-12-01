@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import Mock, patch
-import src.systools.diskdetect as diskdetect
+import src.diskutils.diskdetect as diskdetect
 
 
 class DiskDetectTest(unittest.TestCase):
@@ -41,7 +41,7 @@ class DiskDetectTest(unittest.TestCase):
         self.assertEqual('256060514304', extracted['SIZE'])
         self.assertFalse('TYPE' in extracted)
 
-    @patch('src.systools.diskdetect.logging')
+    @patch('src.diskutils.diskdetect.logging')
     def test_extract_pairs_with_missing_name_raises_exception(self, log_mock):
         test_str = 'TYPE="disk" FSTYPE="test_val" SIZE="256060514304"'
         with self.assertRaises(ValueError):

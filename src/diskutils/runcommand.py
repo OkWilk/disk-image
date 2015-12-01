@@ -21,6 +21,26 @@ class OutputParser:
         self.output = data
 
 
+class OutputToFileConverter(OutputParser):
+    """The special Output Parser extension that allows writing output directly
+    to a file in both: write and append modes and providing it as the standard
+    output the way OutputParser does.
+    """
+
+    def __init__(self, target_file:str, append:bool=False):
+        if append:
+            self.mode = 'a'
+        else:
+            self.mode = 'w'
+        self.file = target_file
+        self.output = None
+
+    def parse(self, data):
+        self.output = data
+        with open(self.file, self.mode) as fd:
+            fd.write(data)
+
+
 class Execute:
     """Command execution wrapper that provides support for both, line-buffering
     through tty emulation and blocking modes.
