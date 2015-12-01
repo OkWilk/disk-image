@@ -4,12 +4,13 @@ import src.diskutils.image as image
 
 
 class ImageTest(unittest.TestCase):
+    DETECT_MOCK_VALUES = {'sda': {'partitions':
+        [{'fs': 'ntfs', 'name': 'sda1', 'size': '3930423296'}],
+        'size': '3932160000', 'type': 'disk'}}
 
     @patch('src.diskutils.image.detect_disks')
     def setUp(self, detect_mock):
-        detect_mock.return_value = {'sda': {'partitions':
-            [{'fs': 'ntfs', 'name': 'sda1', 'size': '3930423296'}],
-            'size': '3932160000', 'type': 'disk'}}
+        detect_mock.return_value = self.DETECT_MOCK_VALUES
         self.clone = image.PartitionImage('sda', '/tmp/')
         self.source = '/source/file'
         self.target = '/target/file'
@@ -44,30 +45,78 @@ class ImageTest(unittest.TestCase):
         self.assertTrue(self.clone.CURRENT_PARTITION in self.clone.get_status())
 
     @patch('src.diskutils.image.detect_disks')
+    def test_image_created_with_config(self, detect_mock):
+        detect_mock.return_value = self.DETECT_MOCK_VALUES
+        config = {
+            'overwrite': True, 'rescue': True, 'space_check': True,
+            'fs_check': True, 'crc_check': True, 'force': True,
+            'refresh_delay': 10, 'compress': True
+        }
+        imager = image.PartitionImage.with_config('sda', '/tmp', config)
+        self.assert_config(imager, overwrite=config['overwrite'],
+                           rescue=config['rescue'], space_check=config['space_check'],
+                           fs_check=config['fs_check'], crc_check=config['crc_check'],
+                           force=config['force'], refresh_delay=config['refresh_delay'],
+                           compress=config['compress'])
+
+    @patch('src.diskutils.image.detect_disks')
+    def test_image_created_with_config2(self, detect_mock):
+        detect_mock.return_value = self.DETECT_MOCK_VALUES
+        config = {
+            'overwrite': False, 'rescue': False, 'space_check': False,
+            'fs_check': False, 'crc_check': False, 'force': False,
+            'refresh_delay': 7, 'compress': False, 'random_key': 231312
+        }
+        imager = image.PartitionImage.with_config('sda', '/tmp', config)
+        self.assert_config(imager, overwrite=config['overwrite'],
+                           rescue=config['rescue'], space_check=config['space_check'],
+                           fs_check=config['fs_check'], crc_check=config['crc_check'],
+                           force=config['force'], refresh_delay=config['refresh_delay'],
+                           compress=config['compress'])
+
+    @patch('src.diskutils.image.logging')
+    @patch('src.diskutils.image.detect_disks')
+    def test_image_with_config_raises_on_missing_key(self, detect_mock, logger_mock):
+        detect_mock.return_value = self.DETECT_MOCK_VALUES
+        config = {'overwrite': True, 'random': False}
+        with self.assertRaises(Exception):
+            imager = image.PartitionImage.with_config('sda', '/tmp', config)
+        self.assertTrue(logger_mock.error.called)
+
+    def assert_config(self, imager, overwrite, rescue, space_check, fs_check,
+                      crc_check, force, refresh_delay, compress):
+        self.assertEqual(overwrite, imager.config['overwrite'])
+        self.assertEqual(rescue, imager.config['rescue'])
+        self.assertEqual(space_check, imager.config['space_check'])
+        self.assertEqual(fs_check, imager.config['fs_check'])
+        self.assertEqual(crc_check, imager.config['crc_check'])
+        self.assertEqual(force, imager.config['force'])
+        self.assertEqual(refresh_delay, imager.config['refresh_delay'])
+        self.assertEqual(compress, imager.config['compress'])
+
+    @patch('src.diskutils.image.detect_disks')
     def test_config_to_command_parameters(self, detect_mock):
-        detect_mock.return_value = {'sda': {'partitions':
-            [{'fs': 'ntfs', 'name': 'sda1', 'size': '3930423296'}],
-            'size': '3932160000', 'type': 'disk'}}
+        detect_mock.return_value = self.DETECT_MOCK_VALUES
         clone = image.PartitionImage('sda','/tmp', overwrite=False, rescue=False,
                                      space_check=False, fs_check=False,
                                      crc_check=False, force=False,
-                                     refresh_delay=0, verbose=False)
-        self.assertEqual('-C -I -i -B',
+                                     refresh_delay=0, compress=False)
+        self.assertEqual('-C -I -i',
                          ' '.join(clone._config_to_command_parameters()))
         clone = image.PartitionImage('sda','/tmp', overwrite=False, rescue=True,
                                      space_check=True, fs_check=True,
                                      crc_check=True, force=True,
-                                     refresh_delay=10, verbose=True)
+                                     refresh_delay=10, compress=False)
         self.assertEqual('-R -F -f 10',
                          ' '.join(clone._config_to_command_parameters()))
 
     def test_build_command(self):
         self.clone.config['overwrite'] = True
-        self.assertEqual('partclone.ntfs -f 5 -B -s /source/file -O /target/file',
+        self.assertEqual('partclone.ntfs -f 5 -s /source/file -O /target/file',
                          ' '.join(self.clone._build_command(self.source,
                                                             self.target, self.fs)))
         self.clone.config['overwrite'] = False
-        self.assertEqual('partclone.ntfs -f 5 -B -s /source/file -o /target/file',
+        self.assertEqual('partclone.ntfs -f 5 -s /source/file -o /target/file',
                          ' '.join(self.clone._build_command(self.source,
                                                             self.target, self.fs)))
 

@@ -32,13 +32,13 @@ class PartitionImage:
         'raw': 'partclone.dd',
     }
 
-    def __init__(self, disk:str, dir:str, overwrite:bool=False, rescue:bool=False,
+    def __init__(self, disk:str, path:str, overwrite:bool=False, rescue:bool=False,
                  space_check:bool=True, fs_check:bool=True, crc_check:bool=True,
-                 force:bool=False, refresh_delay:int=5, verbose:bool=False):
+                 force:bool=False, refresh_delay:int=5, compress:bool=False):
         self.disk = disk
         self.disk_info = self._get_disk_info(disk)
         # TODO: add exception if disk info cannot be retrieved
-        self.dir = dir
+        self.path = path
         self.config = {
             'overwrite': overwrite,
             'rescue': rescue,
@@ -47,11 +47,22 @@ class PartitionImage:
             'crc_check': crc_check,
             'force': force,
             'refresh_delay': refresh_delay,
-            'verbose': verbose,
+            'compress': compress
         }
         self._status = {}
         self.current_partition = ""
         self._init_status()
+
+    @classmethod
+    def with_config(cls, disk:str, path:str, config:dict):
+        try:
+            return cls(disk, path, config['overwrite'], config['rescue'],
+                       config['space_check'], config['fs_check'],
+                       config['crc_check'], config['force'],
+                       config['refresh_delay'], config['compress'])
+        except BaseException as e:
+            logging.error('Cannot build imager with config ' + str(config) + ', reason: ' + str(e))
+            raise e
 
     def get_status(self):
         """Returns updated status for the executed process."""
@@ -64,10 +75,16 @@ class PartitionImage:
             self.current_partition = partition['name']
             self._status[self.current_partition] = {}
             source = '/dev/' + self.current_partition
-            target = self.dir + self.current_partition.replace(self.disk, 'part') + '.img'
+            img_file = self.current_partition.replace(self.disk, 'part') + '.img'
+            target = self.path + img_file
             fs = partition['fs']
-            command = self._backup_command(source, target, fs)
-            self._runner = Execute(command, _PartcloneOutputParser(), use_pty=True)
+            if self.config['compress']:
+                command = self._command_with_compression(source, target, img_file, fs)
+                self._runner = Execute(' '.join(command), _PartcloneOutputParser(),
+                                       shell=True, use_pty=True)
+            else:
+                command = self._backup_command(source, target, fs)
+                self._runner = Execute(command, _PartcloneOutputParser(), use_pty=True)
             self._status[self.current_partition]['status'] = self.STATUS_RUNNING
             self._runner.run()
             self._update_status()
@@ -86,7 +103,13 @@ class PartitionImage:
         the target disk. The status for each partition is set to pending."""
         self._status['current_partition'] = self.current_partition
         for partition in self.disk_info['partitions']:
-            self._status[partition['name']] = {'status': self.STATUS_PENDING}
+            self._status[partition['name']] = {
+                'status': self.STATUS_PENDING,
+                'completed': '0%',
+                'elapsed': '00:00:00',
+                'rate': '0b/min',
+                'remaining': '00:00:00',
+            }
 
     def _update_status(self):
         """Retrieves newest output from output parser and includes it with the
@@ -105,6 +128,13 @@ class PartitionImage:
         command = self._build_command(source, target, fs)
         command.append('-c')  # create backup
         return command
+
+    def _command_with_compression(self, source:str, target:str, image_name:str, fs:str):
+        TEMP_DIR = '/dev/null'
+        return ['mksquashfs', TEMP_DIR, target.replace('img', 'sqfs'),
+                '-noappend', '-no-progress', '-p \'' + image_name +
+                ' f 444 root root ' +
+                ' '.join(self._backup_command(source, '-', fs)) + '\'']
 
     def _restore_command(self, source:str, target:str, fs:str):
         """Creates a restore command for specified partition
@@ -155,8 +185,6 @@ class PartitionImage:
             command.append('-F')
         if self.config['refresh_delay']:
             command.extend(['-f', str(self.config['refresh_delay'])])
-        if not self.config['verbose']:
-            command.append('-B')
         return command
 
 
