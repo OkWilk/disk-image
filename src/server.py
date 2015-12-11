@@ -13,6 +13,14 @@ restorations = {}
 mounts = {}
 
 
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE')
+    return response
+
+
 class Disk(Resource):
     def get(self):
         return detect_disks()
@@ -41,6 +49,9 @@ class Backup(Resource):
     _parser.add_argument('compress', type=bool, location='json')
 
     def get(self):
+        if backups:
+            for key in backups.keys():
+                backups[key]['details'] = _backups[key]['controller'].get_status()
         return backups
 
     def post(self):
@@ -104,4 +115,4 @@ api.add_resource(BackupDetails, '/job/backup/<backup_id>')
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', threaded=True)

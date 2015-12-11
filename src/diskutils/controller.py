@@ -30,16 +30,21 @@ class ProcessController:
         self._thread.start()
 
     def _backup(self):
-        DATE_FORMAT = '%d/%m/%Y %H:%M:%S'
-        self._status['status'] = 'running'
-        self._status['start_time'] = datetime.today().strftime(DATE_FORMAT)
-        self._create_backup_directory()
-        self._status['path'] = self.backup_dir
-        self._status['layout'] = self._disk_layout.detect_layout()
-        self._disk_layout.backup_layout()
-        self._imager.backup()
-        self._status['end_time'] = datetime.today().strftime(DATE_FORMAT)
-        self._status['status'] = 'finished'
+        try:
+            DATE_FORMAT = '%d/%m/%Y %H:%M:%S'
+            self._status['status'] = 'running'
+            self._status['start_time'] = datetime.today().strftime(DATE_FORMAT)
+            self._create_backup_directory()
+            self._status['path'] = self.backup_dir
+            self._status['layout'] = self._disk_layout.detect_layout()
+            self._disk_layout.backup_layout()
+            self._imager.backup()
+            self._status['status'] = 'finished'
+        except Exception as e:
+            self._status['status'] = 'error'
+            self._status['error_msg'] = str(e)
+        finally:
+            self._status['end_time'] = datetime.today().strftime(DATE_FORMAT)
 
     def _create_backup_directory(self):
         if not path.exists(self.backup_dir):

@@ -105,7 +105,7 @@ class Execute:
         master_fd, slave_fd = pty.openpty()
         self.process = subprocess.Popen(self.command, stdin=slave_fd,
                                         stdout=slave_fd, stderr=subprocess.STDOUT,
-                                        close_fds=True, shell=self.shell)
+                                        close_fds=False, shell=self.shell)
         os.close(slave_fd)
         try:
             while True:
@@ -114,7 +114,7 @@ class Execute:
                 except OSError as e:
                     if e.errno == errno.EIO:
                         break  # EIO == EOF on some systems
-                    raise
+                    raise e
                 else:
                     if not data:  # EOF
                         break

@@ -71,24 +71,28 @@ class PartitionImage:
 
     def backup(self):
         """Creates image backup for each of the partitions on the designated drive"""
-        for partition in self.disk_info['partitions']:
-            self.current_partition = partition['name']
-            self._status[self.current_partition] = {}
-            source = '/dev/' + self.current_partition
-            img_file = self.current_partition.replace(self.disk, 'part') + '.img'
-            target = self.path + img_file
-            fs = partition['fs']
-            if self.config['compress']:
-                command = self._command_with_compression(source, target, img_file, fs)
-                self._runner = Execute(' '.join(command), _PartcloneOutputParser(),
-                                       shell=True, use_pty=True)
-            else:
-                command = self._backup_command(source, target, fs)
-                self._runner = Execute(command, _PartcloneOutputParser(), use_pty=True)
-            self._status[self.current_partition]['status'] = self.STATUS_RUNNING
-            self._runner.run()
-            self._update_status()
-            self._status[self.current_partition]['status'] = self.STATUS_FINISHED
+        try:
+            for partition in self.disk_info['partitions']:
+                self.current_partition = partition['name']
+                self._status[self.current_partition] = {}
+                source = '/dev/' + self.current_partition
+                img_file = self.current_partition.replace(self.disk, 'part') + '.img'
+                target = self.path + img_file
+                fs = partition['fs']
+                if self.config['compress']:
+                    command = self._command_with_compression(source, target, img_file, fs)
+                    self._runner = Execute(' '.join(command), _PartcloneOutputParser(),
+                                           shell=True, use_pty=True)
+                else:
+                    command = self._backup_command(source, target, fs)
+                    self._runner = Execute(command, _PartcloneOutputParser(), use_pty=True)
+                self._status[self.current_partition]['status'] = self.STATUS_RUNNING
+                self._runner.run()
+                self._update_status()
+                self._status[self.current_partition]['status'] = self.STATUS_FINISHED
+        except Exception as e:
+            self._status[self.current_partition]['status'] = self.STATUS_ERROR
+            raise Exception('Error detected during imaging partition: ' + self.current_partition + '. Cause: ' + str(e))
 
     def restore(self):
         """Restores image backups to the designated drive"""
@@ -101,11 +105,11 @@ class PartitionImage:
     def _init_status(self):
         """Initializes the status information with all partitions detected for
         the target disk. The status for each partition is set to pending."""
-        self._status['current_partition'] = self.current_partition
         for partition in self.disk_info['partitions']:
             self._status[partition['name']] = {
+                'name': partition['name'],
                 'status': self.STATUS_PENDING,
-                'completed': '0%',
+                'completed': '0',
                 'elapsed': '00:00:00',
                 'rate': '0b/min',
                 'remaining': '00:00:00',
@@ -115,8 +119,8 @@ class PartitionImage:
         """Retrieves newest output from output parser and includes it with the
         status information."""
         if self.current_partition and self._runner and self._runner.output():
-            self._status['current_partition'] = self.current_partition
             self._status[self.current_partition].update(self._runner.output())
+            self._status[self.current_partition]['name'] = self.current_partition
 
     def _backup_command(self, source:str, target:str, fs:str):
         """Creates a backup command for specified partition
@@ -205,19 +209,27 @@ class _PartcloneOutputParser(OutputParser):
                     key, value = item.lower().split(':',1)
                     key = key.strip()
                     value = value.strip()
-                    if key in self._valid_keys:
+                    if key in self._valid_keys and 'completed' in key:
+                        self._output_dict[key] = value[0:-1]
+                    elif key in self._valid_keys:
                         self._output_dict[key] = value
-                elif '/min' in item:  # some lines do not have 'rate: ' but still have '[MK]B/min'
-                    self._output_dict['rate'] = item.strip()
+                    elif '/min' in item:  # some lines do not have 'rate: ' but still have '[MK]B/min'
+                        self._output_dict['rate'] = item.strip()
         if self._output_dict:
             self.output = self._output_dict
 
     def _check_for_errors(self, string):
         """Tests the output string for error messages and processes them."""
         string = string.lower()
-        if 'file exists (17)' in string:
+        self._find_and_raise('file exists (17)', string)
+        self._find_and_raise('*** buffer overflow detected ***:', string)
+        self._find_and_raise('failed to read file', string)
+        self._find_and_raise('error', string)
+
+    def _find_and_raise(self, target, string):
+        if target in string:
             logging.error(string)
-            raise ImageError(string)
+            raise ImageError("Critical error detected during imaging procedure.")
 
 
 class ImageError(Exception):
