@@ -224,13 +224,13 @@ class _PartcloneOutputParser(OutputParser):
         self._find_and_raise('file exists (17)', string)
         self._find_and_raise('*** buffer overflow detected ***:', string)
         self._find_and_raise('failed to read file', string)
-        self._find_and_raise('use the --rescue option', String)
+        self._find_and_raise('use the --rescue option', string)
         self._find_and_raise('error', string)
 
     def _find_and_raise(self, target, string):
         if target in string:
             logging.error(string)
-            raise ImageError("Critical error detected during imaging procedure.")
+            raise ImageError(string)
 
 
 class ImageError(Exception):
