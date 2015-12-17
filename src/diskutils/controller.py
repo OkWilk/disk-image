@@ -11,6 +11,9 @@ from .image import PartitionImage
 
 class ProcessController:
     BACKUP_PATH = '/tmp/'
+    STATUS_RUNNING = 'running'
+    STATUS_ERROR = 'error'
+    STATUS_FINISHED = 'finished'
 
     def __init__(self, disk, job_id, config):
         self.disk = disk
@@ -32,16 +35,16 @@ class ProcessController:
     def _backup(self):
         try:
             DATE_FORMAT = '%d/%m/%Y %H:%M:%S'
-            self._status['status'] = 'running'
+            self._status['status'] = self.STATUS_RUNNING
             self._status['start_time'] = datetime.today().strftime(DATE_FORMAT)
             self._create_backup_directory()
             self._status['path'] = self.backup_dir
             self._status['layout'] = self._disk_layout.detect_layout()
             self._disk_layout.backup_layout()
             self._imager.backup()
-            self._status['status'] = 'finished'
+            self._status['status'] = self.STATUS_FINISHED
         except Exception as e:
-            self._status['status'] = 'error'
+            self._status['status'] = self.STATUS_ERROR
             self._status['error_msg'] = str(e)
         finally:
             self._status['end_time'] = datetime.today().strftime(DATE_FORMAT)

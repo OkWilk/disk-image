@@ -1,7 +1,6 @@
-from flask_restful import Resource, abort, reqparse, fields, marshal_with
+from flask_restful import Resource, abort, reqparse, fields, marshal_with, request
 from diskutils.controller import ProcessController
 
-backups = {}
 _backups = {}
 
 
@@ -19,20 +18,21 @@ class Backup(Resource):
     _parser.add_argument('compress', type=bool, location='json')
 
     def get(self):
-        if backups:
-            for key in backups.keys():
-                backups[key]['details'] = _backups[key]['controller'].get_status()
-        return backups
+        payload = {}
+        details = BackupDetails()
+        if _backups:
+            for key in _backups.keys():
+                payload[key] = {'source': _backups[key]['source']}
+                payload[key]['details'] = details.get(key)
+        return payload
 
     def post(self):
         args = self._parser.parse_args(strict=True)
         config = self._build_config_from_request_args(args)
-        print(str(config))
         if args['job_id'] and args['source']:
             controller = ProcessController(args['source'], args['job_id'], config)
             controller.backup()
             _backups[args['job_id']] = {'source': args['source'], 'controller': controller}
-            backups[args['job_id']] = {'source': args['source']}
             return "OK", 200
         else:
             abort(400, message="Error: Invalid input detected.")
@@ -80,5 +80,14 @@ class BackupDetails(Resource):
 
     def delete(self, backup_id):
         if backup_id in _backups:
+            self._finish_backup(backup_id)
+        else:
+            abort(400, message="Error: Invalid resource requested.")
+
+    def _finish_backup(self, backup_id):
+        status = self.get(backup_id)
+        if status['status'] == ProcessController.STATUS_FINISHED:
             _backups.pop(backup_id)
-            backups.pop(backup_id)
+            return 'OK', 200
+        else:  # TODO: allow terminating jobs and deleting them.
+            abort(400, message="Cannot abort job at this moment.")
