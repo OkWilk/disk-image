@@ -16,11 +16,14 @@ class ImageTest(unittest.TestCase):
         self.target = '/target/file'
         self.fs = 'ntfs'
 
-    def test_core_fs_are_supported(self):  # TODO: add HFS+
+    def test_core_fs_are_supported(self):
         self.assertEqual('partclone.ntfs', self.clone._fs_to_command['ntfs'])
         self.assertEqual('partclone.vfat', self.clone._fs_to_command['vfat'])
         self.assertEqual('partclone.ext3', self.clone._fs_to_command['ext3'])
         self.assertEqual('partclone.ext4', self.clone._fs_to_command['ext4'])
+        self.assertEqual('partclone.hfsp', self.clone._fs_to_command['hfsplus'])
+        self.assertEqual('partclone.hfsp', self.clone._fs_to_command['hfs+'])
+        self.assertEqual('partclone.hfsp', self.clone._fs_to_command['hfs'])
         self.assertEqual('partclone.dd', self.clone._fs_to_command['raw'])
 
     def test_select_command_for_valid_fs(self):
@@ -36,13 +39,11 @@ class ImageTest(unittest.TestCase):
                          self.clone._select_command_by_fs('invalid'))
 
     def test_init_status(self):
-        self.assertTrue(self.clone.CURRENT_PARTITION in self.clone._status)
         self.assertTrue('sda1' in self.clone._status)
         self.assertEqual(self.clone.STATUS_PENDING, self.clone._status['sda1']['status'])
 
     def test_get_status(self):
         self.assertTrue('sda1' in self.clone.get_status())
-        self.assertTrue(self.clone.CURRENT_PARTITION in self.clone.get_status())
 
     @patch('src.diskutils.image.detect_disks')
     def test_image_created_with_config(self, detect_mock):
@@ -120,6 +121,20 @@ class ImageTest(unittest.TestCase):
                          ' '.join(self.clone._build_command(self.source,
                                                             self.target, self.fs)))
 
+    def test_get_backup_runner_without_compression(self):
+        partition_data = self.DETECT_MOCK_VALUES['sda']['partitions'][0]
+        self.clone.config['compress'] = False
+        self.clone._prepare_for_partition(partition_data)
+        runner = self.clone._get_backup_runner()
+        self.assertFalse('mksquashfs' in runner.command)
+
+    def test_get_backup_runner_with_compression(self):
+        partition_data = self.DETECT_MOCK_VALUES['sda']['partitions'][0]
+        self.clone.config['compress'] = True
+        self.clone._prepare_for_partition(partition_data)
+        runner = self.clone._get_backup_runner()
+        self.assertTrue('mksquashfs' in runner.command)
+
     def test_backup_command(self):
         command = self.clone._backup_command(self.source, self.target, self.fs)
         self.assertTrue('-c' in command)
@@ -133,6 +148,7 @@ class ImageTest(unittest.TestCase):
     @patch('src.diskutils.image.Execute')
     def test_backup(self, exec_class):
         exec_mock = Mock()
+        exec_mock.poll.return_value = 0
         exec_class.return_value = exec_mock
         exec_mock.output.return_value = {
             "completed": "100.00%",
@@ -144,6 +160,29 @@ class ImageTest(unittest.TestCase):
         self.assertEqual(1, exec_mock.run.call_count)
         self.assertEqual(1, exec_class.call_count)
         self.assertEqual(self.clone.STATUS_FINISHED, self.clone._status['sda1']['status'])
+
+    @patch('src.diskutils.image.Execute')
+    def test_backup_raises_on_error(self, execute_mock):
+        runner = Mock()
+        runner.run.side_effect = Exception('Something went wrong')
+        execute_mock.return_value = runner
+        with self.assertRaises(Exception):
+            self.clone.backup()
+
+    def test_handle_exit_code(self):
+        self.clone._update_status = Mock()
+        self.clone._current_partition = 'sda1'
+        self.clone._handle_exit_code(0)
+        self.assertEqual('finished', self.clone._status['sda1']['status'])
+        self.assertTrue(self.clone._update_status.called)
+
+    def test_handle_exit_code_with_error(self):
+        self.clone._update_status = Mock()
+        self.clone._current_partition = 'sda1'
+        with self.assertRaises(Exception):
+            self.clone._handle_exit_code(123)
+            self.assertEqual('error', self.clone._status['sda1']['status'])
+            self.assertFalse(self.clone._update_status.called)
 
     def test_restore(self):
         with self.assertRaises(NotImplementedError):
@@ -163,18 +202,26 @@ class PartcloneOutputParserTest(unittest.TestCase):
         self.assertEqual(1, log_mock.error.call_count)
 
     def test_parse(self):
-        base_string = 'Elapsed: 00:01:22, Remaining: 00:01:20, Completed: 50.20%,'
+        base_string = 'Elapsed: 00:01:22, Remaining: 00:01:20, Completed: 50.2%, '
         self._parse_and_assert(base_string + '816.85mb/min', '00:01:22',
-                               '00:01:20', '50.20%', '816.85mb/min')
+                               '00:01:20', '50.2')
         self._parse_and_assert(base_string + 'Rate: 816.85MB/min, ',
-                               '00:01:22', '00:01:20', '50.20%', '816.85mb/min')
+                               '00:01:22', '00:01:20', '50.2')
+
+    def test_valid_data_is_not_removed_by_empty_lines(self):
+        self.parser.parse('')
+        self.assertEqual(None, self.parser.output)
+        string = 'Elapsed: 00:01:22, Remaining: 00:01:20, Completed: 50.2%, '
+        self._parse_and_assert(string + '816.85mb/min', '00:01:22',
+                               '00:01:20', '50.2')
+        self._parse_and_assert('', '00:01:22', '00:01:20', '50.2')
 
     @patch('src.diskutils.image.logging')
     def test_parse_checks_for_errors(self, log_mock):
         with self.assertRaises(image.ImageError):
             self.parser.parse('open target fail /tmp/part1.img: file exists (17)')
 
-    def _parse_and_assert(self, string, elapsed, remaining, completed, rate):
+    def _parse_and_assert(self, string, elapsed, remaining, completed):
         self.parser.parse(string)
         self.assertEqual({'elapsed': elapsed, 'remaining': remaining,
-                          'completed': completed, 'rate': rate}, self.parser.output)
+                          'completed': completed}, self.parser.output)
