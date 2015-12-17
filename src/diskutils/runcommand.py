@@ -107,21 +107,19 @@ class Execute:
                                         stdout=slave_fd, stderr=subprocess.STDOUT,
                                         close_fds=False, shell=self.shell)
         os.close(slave_fd)
-        try:
-            while True:
-                try:
-                    data = os.read(master_fd, self.buffer_size)
-                except OSError as e:
-                    if e.errno == errno.EIO:
-                        break  # EIO == EOF on some systems
-                    raise e
-                else:
-                    if not data:  # EOF
-                        break
-                    self.output_parser.parse(data.decode("utf-8"))
-        finally:
-            os.close(master_fd)
-            self.kill()
+        while True:
+            try:
+                data = os.read(master_fd, self.buffer_size)
+            except OSError as e:
+                if e.errno == errno.EIO:
+                    break  # EIO == EOF on some systems
+                raise e
+            else:
+                if not data:  # EOF
+                    break
+                self.output_parser.parse(data.decode("utf-8"))
+        os.close(master_fd)
+        return self.kill()
 
     def _run_without_pty(self):
         """Executes command and passes standard output to the output_parser."""

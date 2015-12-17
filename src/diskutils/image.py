@@ -18,8 +18,11 @@ class PartitionImage:
     STATUS_RUNNING = 'running'
     STATUS_FINISHED = 'finished'
     STATUS_ERROR = 'error'
+    DEVICE_PATH = '/dev/'
+    IMAGE_PREFIX = 'part'
+    IMAGE_SUFFIX = '.img'
 
-    _fs_to_command = {  # TODO: add remaining filesystems (!HFS+!)
+    _fs_to_command = {
         'ntfs': 'partclone.ntfs',
         'fat32': 'partclone.fat32',
         'fat16': 'partclone.fat16',
@@ -29,6 +32,9 @@ class PartitionImage:
         'ext2': 'partclone.ext2',
         'ext3': 'partclone.ext3',
         'ext4': 'partclone.ext4',
+        'hfsplus': 'partclone.hfsp',
+        'hfs+': 'partclone.hfsp',
+        'hfs': 'partclone.hfsp',
         'raw': 'partclone.dd',
     }
 
@@ -37,7 +43,6 @@ class PartitionImage:
                  force:bool=False, refresh_delay:int=5, compress:bool=False):
         self.disk = disk
         self.disk_info = self._get_disk_info(disk)
-        # TODO: add exception if disk info cannot be retrieved
         self.path = path
         self.config = {
             'overwrite': overwrite,
@@ -50,7 +55,7 @@ class PartitionImage:
             'compress': compress
         }
         self._status = {}
-        self.current_partition = ""
+        self._current_partition = ""
         self._init_status()
 
     @classmethod
@@ -71,28 +76,16 @@ class PartitionImage:
 
     def backup(self):
         """Creates image backup for each of the partitions on the designated drive"""
-        try:
-            for partition in self.disk_info['partitions']:
-                self.current_partition = partition['name']
-                self._status[self.current_partition] = {}
-                source = '/dev/' + self.current_partition
-                img_file = self.current_partition.replace(self.disk, 'part') + '.img'
-                target = self.path + img_file
-                fs = partition['fs']
-                if self.config['compress']:
-                    command = self._command_with_compression(source, target, img_file, fs)
-                    self._runner = Execute(' '.join(command), _PartcloneOutputParser(),
-                                           shell=True, use_pty=True)
-                else:
-                    command = self._backup_command(source, target, fs)
-                    self._runner = Execute(command, _PartcloneOutputParser(), use_pty=True)
-                self._status[self.current_partition]['status'] = self.STATUS_RUNNING
+        for partition in self.disk_info['partitions']:
+            self._prepare_for_partition(partition)
+            self._runner = self._get_backup_runner()
+            self._status[self._current_partition]['status'] = self.STATUS_RUNNING
+            try:
                 self._runner.run()
-                self._update_status()
-                self._status[self.current_partition]['status'] = self.STATUS_FINISHED
-        except Exception as e:
-            self._status[self.current_partition]['status'] = self.STATUS_ERROR
-            raise Exception('Error detected during imaging partition: ' + self.current_partition + '. Cause: ' + str(e))
+                self._handle_exit_code(self._runner.poll())
+            except Exception as e:
+                self._status[self._current_partition]['status'] = self.STATUS_ERROR
+                raise Exception('Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
 
     def restore(self):
         """Restores image backups to the designated drive"""
@@ -111,16 +104,28 @@ class PartitionImage:
                 'status': self.STATUS_PENDING,
                 'completed': '0',
                 'elapsed': '00:00:00',
-                'rate': '0b/min',
                 'remaining': '00:00:00',
             }
 
     def _update_status(self):
         """Retrieves newest output from output parser and includes it with the
         status information."""
-        if self.current_partition and self._runner and self._runner.output():
-            self._status[self.current_partition].update(self._runner.output())
-            self._status[self.current_partition]['name'] = self.current_partition
+        if self._current_partition and self._runner and self._runner.output():
+            self._status[self._current_partition].update(self._runner.output())
+            self._status[self._current_partition]['name'] = self._current_partition
+
+    def _get_backup_runner(self):
+        if self.config['compress']:
+            command = self._command_with_compression(self._current_source_device,
+                                                    self._current_target,
+                                                    self._current_img_file,
+                                                    self._current_fs)
+            return Execute(' '.join(command), _PartcloneOutputParser(),
+                           shell=True, use_pty=True)
+        else:
+            command = self._backup_command(self._current_source_device,
+                                           self._current_target, self._current_fs)
+            return Execute(command, _PartcloneOutputParser(), use_pty=True)
 
     def _backup_command(self, source:str, target:str, fs:str):
         """Creates a backup command for specified partition
@@ -191,9 +196,26 @@ class PartitionImage:
             command.extend(['-f', str(self.config['refresh_delay'])])
         return command
 
+    def _handle_exit_code(self, exit_code):
+        partition_details = self._status[self._current_partition]
+        if exit_code == 0:
+            self._update_status()
+            partition_details['status'] = self.STATUS_FINISHED
+        else:
+            partition_details['status'] = self.STATUS_ERROR
+            raise Exception('The imaging did not finish successfully.')
+
+    def _prepare_for_partition(self, partition):
+        self._current_partition = partition['name']
+        self._status[self._current_partition] = {}
+        self._current_source_device = self.DEVICE_PATH + self._current_partition
+        self._current_img_file = self._current_partition.replace(self.disk, self.IMAGE_PREFIX) + self.IMAGE_SUFFIX
+        self._current_target = self.path + self._current_img_file
+        self._current_fs = partition['fs']
+
 
 class _PartcloneOutputParser(OutputParser):
-    _valid_keys = ['elapsed', 'remaining', 'completed', 'rate']
+    _valid_keys = ['elapsed', 'remaining', 'completed']
 
     def __init__(self):
         self.output = None
@@ -213,8 +235,6 @@ class _PartcloneOutputParser(OutputParser):
                         self._output_dict[key] = value[0:-1]
                     elif key in self._valid_keys:
                         self._output_dict[key] = value
-                    elif '/min' in item:  # some lines do not have 'rate: ' but still have '[MK]B/min'
-                        self._output_dict['rate'] = item.strip()
         if self._output_dict:
             self.output = self._output_dict
 

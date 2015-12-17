@@ -66,7 +66,7 @@ class _LsblkOutputParser(OutputParser):
                     'type': record['TYPE'],
                     'partitions': partitions
                 }
-            elif(record['TYPE'] == 'part' and name in record['KNAME']):
+            else:
                 partition = {
                     'name': record['KNAME'],
                     'size': record['SIZE'],

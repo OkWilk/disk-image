@@ -73,6 +73,13 @@ class ProcessControllerTest(unittest.TestCase):
         status = self.controller.get_status()
         self.assertEqual('', status['partitions'])
 
+    def test_sets_status_to_error_with_message(self):
+        self.controller._imager = Mock()
+        self.controller._imager.backup.side_effect = Exception("message")
+        self.controller._backup()
+        self.assertEqual('error', self.controller._status['status'])
+        self.assertTrue(self.controller._status['error_msg'])
+
     def assert_status(self, status='', path='', layout='', partitions='',
                       start_time=False, end_time=False):
         self.assertEqual(status, self.controller._status['status'])
