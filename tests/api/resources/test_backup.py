@@ -7,6 +7,9 @@ from src.api.resources.backup import Backup
 
 class BackupTest(unittest.TestCase):
 
+    def setUp(self):
+        pass
+
     def test_start(self):
         backup = Backup()
         self.assertTrue(backup)

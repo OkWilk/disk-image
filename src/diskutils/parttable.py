@@ -7,6 +7,10 @@ from .runcommand import Execute, OutputToFileConverter
 
 
 class DiskLayout:
+    MBR_SIZE = 512
+    MBR_TARGET_FILE = 'mbr.img'
+    PARTITION_TABLE_TARGET_FILE = 'ptable.bak'
+
     def __init__(self, disk, target_dir, overwrite:bool=False):
         self.disk = disk
         self.target_dir = target_dir
@@ -41,6 +45,15 @@ class DiskLayout:
         else:
             raise Exception("Unrecognized partition layout detected.")
 
+    def restore_layout(self):
+        layout = 'MBR'
+        if layout is 'MBR':
+            self._restore_mbr_layout()
+        elif layout is 'GPT':
+            self._restore_gpt_layout()
+        else:
+            raise Exception("Unrecognized partition layout detected.")
+
     def _backup_mbr_layout(self):
         self._backup_mbr()
         self._backup_mbr_partition_table()
@@ -49,18 +62,19 @@ class DiskLayout:
         raise NotImplementedError
 
     def _restore_mbr_layout(self):
-        raise NotImplementedError
+        self._restore_mbr()
+        self._restore_mbr_partition_table()
+        self._refresh_partition_table()
 
     def _restore_gpt_layout(self):
         raise NotImplementedError
 
     def _backup_mbr(self):
-        mbr_size = 512
-        target_file = self.target_dir + 'mbr.img'
+        target_file = self.target_dir + self.MBR_TARGET_FILE
         self._check_if_file_exists_with_raise(target_file,
             'Existing MBR backup detected at ' + target_file + '. Not overwritting.')
         dd_command = ['dd', 'if=/dev/' + self.disk, 'of=' + target_file, 'bs=' +
-                     str(mbr_size), 'count=1']
+                     str(self.MBR_SIZE), 'count=1']
         dd = Execute(dd_command)
         if(dd.run() != 0):
             logging.error('MBR backup failed, disk:' + self.disk + ', target:' +
@@ -70,7 +84,7 @@ class DiskLayout:
 
     def _backup_mbr_partition_table(self):
         sfdisk_command = ['sfdisk', '-d', '/dev/' + self.disk]
-        target_file = self.target_dir + 'ptable.bak'
+        target_file = self.target_dir + self.PARTITION_TABLE_TARGET_FILE
         self._check_if_file_exists_with_raise(target_file,
             'Existing backup detected at ' + target_file + '. Not overwritting.')
         sfdisk = Execute(sfdisk_command, OutputToFileConverter(target_file))
@@ -84,3 +98,26 @@ class DiskLayout:
         if path.exists(file) and not self.overwrite:
             logging.error(error_message)
             raise Exception(error_message)
+
+    def _restore_mbr(self):
+        source_file = self.target_dir + self.MBR_TARGET_FILE
+        print(str(source_file))
+        dd_command = ['dd', 'if=' + source_file, 'of=/dev/' + self.disk]
+        dd = Execute(dd_command)
+        if(dd.run() != 0):
+            logging.error('MBR restoration failed, source: ' + source_file +
+                          ', target: ' + self.disk)
+
+    def _restore_mbr_partition_table(self):
+        source_file = self.target_dir + self.PARTITION_TABLE_TARGET_FILE
+        sfdisk_command = "sfdisk -f /dev/" + self.disk + ' < ' + source_file
+        sfdisk = Execute(sfdisk_command, shell=True)
+        if(sfdisk.run() != 0):
+            logging.error("Partition table restoration failed, source: " +
+                          source_file + ', target: ' + self.disk)
+
+    def _refresh_partition_table(self):
+        command = ['partprobe', '/dev/' + self.disk]
+        partprobe = Execute(command)
+        if(partprobe.run() != 0):
+            logging.error("Cannot refresh partition table for the disk: " + self.disk)

@@ -89,7 +89,23 @@ class PartitionImage:
 
     def restore(self):
         """Restores image backups to the designated drive"""
-        raise NotImplementedError
+        for partition in self.disk_info['partitions']:
+            self._current_partition = partition['name']
+            self._status[self._current_partition] = {}
+            self._current_target = self.DEVICE_PATH + self._current_partition
+            self._current_img_file = self._current_partition.replace(self.disk, self.IMAGE_PREFIX) + self.IMAGE_SUFFIX
+            self._current_source = self.path + self._current_img_file
+            self._current_fs = partition['fs']
+            command = self._restore_command(self._current_source,
+                                           self._current_target, self._current_fs)
+            self._runner = Execute(command, _PartcloneOutputParser(), use_pty=True)
+            self._status[self._current_partition]['status'] = self.STATUS_RUNNING
+            try:
+                self._runner.run()
+                self._handle_exit_code(self._runner.poll())
+            except Exception as e:
+                self._status[self._current_partition]['status'] = self.STATUS_ERROR
+                raise Exception('Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
 
     def _get_disk_info(self, disk:str):
         """Retrieves information regarding the specified disk."""

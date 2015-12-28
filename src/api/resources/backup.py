@@ -1,5 +1,5 @@
 from flask_restful import Resource, abort, reqparse, fields, marshal_with, request
-from diskutils.controller import ProcessController
+from diskutils.controller import BackupController
 
 _backups = {}
 
@@ -30,8 +30,8 @@ class Backup(Resource):
         args = self._parser.parse_args(strict=True)
         config = self._build_config_from_request_args(args)
         if args['job_id'] and args['source']:
-            controller = ProcessController(args['source'], args['job_id'], config)
-            controller.backup()
+            controller = BackupController(args['source'], args['job_id'], config)
+            controller.run()
             _backups[args['job_id']] = {'source': args['source'], 'controller': controller}
             return "OK", 200
         else:
