@@ -2,7 +2,6 @@
 Date: 05/11/2015
 """
 import logging
-from .diskdetect import detect_disks
 from .runcommand import OutputParser, Execute
 
 
@@ -38,11 +37,11 @@ class PartitionImage:
         'raw': 'partclone.dd',
     }
 
-    def __init__(self, disk:str, path:str, overwrite:bool=False, rescue:bool=False,
+    def __init__(self, disk:str, path:str, backupset:'BackupSet', overwrite:bool=False, rescue:bool=False,
                  space_check:bool=True, fs_check:bool=True, crc_check:bool=True,
                  force:bool=False, refresh_delay:int=5, compress:bool=False):
         self.disk = disk
-        self.disk_info = self._get_disk_info(disk)
+        self.backupset = backupset
         self.path = path
         self.config = {
             'overwrite': overwrite,
@@ -59,9 +58,9 @@ class PartitionImage:
         self._init_status()
 
     @classmethod
-    def with_config(cls, disk:str, path:str, config:dict):
+    def with_config(cls, disk:str, path:str, backupset:'BackupSet', config:dict):
         try:
-            return cls(disk, path, config['overwrite'], config['rescue'],
+            return cls(disk, path, backupset, config['overwrite'], config['rescue'],
                        config['space_check'], config['fs_check'],
                        config['crc_check'], config['force'],
                        config['refresh_delay'], config['compress'])
@@ -76,36 +75,32 @@ class PartitionImage:
 
     def backup(self):
         """Creates image backup for each of the partitions on the designated drive"""
-        for partition in self.disk_info['partitions']:
-            self._prepare_for_partition(partition)
+        for partition in self.backupset.partitions:
+            self._prepare_partition_info(partition)
             self._runner = self._get_backup_runner()
-            self._status[self._current_partition]['status'] = self.STATUS_RUNNING
-            try:
-                self._runner.run()
-                self._handle_exit_code(self._runner.poll())
-            except Exception as e:
-                self._status[self._current_partition]['status'] = self.STATUS_ERROR
-                raise Exception('Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
+            self._run_process()
 
     def restore(self):
         """Restores image backups to the designated drive"""
-        for partition in self.disk_info['partitions']:
-            self._current_partition = partition['name']
-            self._status[self._current_partition] = {}
-            self._current_target = self.DEVICE_PATH + self._current_partition
-            self._current_img_file = self._current_partition.replace(self.disk, self.IMAGE_PREFIX) + self.IMAGE_SUFFIX
-            self._current_source = self.path + self._current_img_file
-            self._current_fs = partition['fs']
-            command = self._restore_command(self._current_source,
-                                           self._current_target, self._current_fs)
-            self._runner = Execute(command, _PartcloneOutputParser(), use_pty=True)
-            self._status[self._current_partition]['status'] = self.STATUS_RUNNING
-            try:
-                self._runner.run()
-                self._handle_exit_code(self._runner.poll())
-            except Exception as e:
-                self._status[self._current_partition]['status'] = self.STATUS_ERROR
-                raise Exception('Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
+        for partition in self.backupset.partitions:
+            self._prepare_partition_info(partition)
+            self._runner = self._get_restoration_runner()
+            self._run_process()
+
+    def _prepare_partition_info(self, partition):
+        self._current_partition = self.disk + partition.id
+        self._current_device = self.DEVICE_PATH + self._current_partition
+        self._current_image_file = self.path + self.IMAGE_PREFIX + partition.id + self.IMAGE_SUFFIX
+        self._current_fs = partition.file_system
+
+    def _run_process(self):
+        self._status[self._current_partition]['status'] = self.STATUS_RUNNING
+        try:
+            self._runner.run()
+            self._handle_exit_code(self._runner.poll())
+        except Exception as e:
+            self._status[self._current_partition]['status'] = self.STATUS_ERROR
+            raise Exception('Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
 
     def _get_disk_info(self, disk:str):
         """Retrieves information regarding the specified disk."""
@@ -114,9 +109,9 @@ class PartitionImage:
     def _init_status(self):
         """Initializes the status information with all partitions detected for
         the target disk. The status for each partition is set to pending."""
-        for partition in self.disk_info['partitions']:
-            self._status[partition['name']] = {
-                'name': partition['name'],
+        for partition in self.backupset.partitions:
+            self._status[self.disk + partition.id] = {
+                'name': self.disk + partition.id,
                 'status': self.STATUS_PENDING,
                 'completed': '0',
                 'elapsed': '00:00:00',
@@ -132,15 +127,22 @@ class PartitionImage:
 
     def _get_backup_runner(self):
         if self.config['compress']:
-            command = self._command_with_compression(self._current_source_device,
-                                                    self._current_target,
-                                                    self._current_img_file,
+            command = self._command_with_compression(self._current_device,
+                                                    self._current_image_file,
                                                     self._current_fs)
             return Execute(' '.join(command), _PartcloneOutputParser(),
                            shell=True, use_pty=True)
         else:
-            command = self._backup_command(self._current_source_device,
-                                           self._current_target, self._current_fs)
+            command = self._backup_command(self._current_device,
+                                           self._current_image_file, self._current_fs)
+            return Execute(command, _PartcloneOutputParser(), use_pty=True)
+
+    def _get_restoration_runner(self):
+        if self.backupset.compressed:
+            raise NotImplementedError
+        else:
+            command = self._restore_command(self._current_image_file,
+                                           self._current_device, self._current_fs)
             return Execute(command, _PartcloneOutputParser(), use_pty=True)
 
     def _backup_command(self, source:str, target:str, fs:str):
@@ -154,8 +156,9 @@ class PartitionImage:
         command.append('-c')  # create backup
         return command
 
-    def _command_with_compression(self, source:str, target:str, image_name:str, fs:str):
+    def _command_with_compression(self, source:str, target:str, fs:str):
         TEMP_DIR = '/dev/null'
+        image_name = target[target.rindex('/'):]
         return ['mksquashfs', TEMP_DIR, target.replace('img', 'sqfs'),
                 '-noappend', '-no-progress', '-p \'' + image_name +
                 ' f 444 root root ' +
@@ -220,14 +223,6 @@ class PartitionImage:
         else:
             partition_details['status'] = self.STATUS_ERROR
             raise Exception('The imaging did not finish successfully.')
-
-    def _prepare_for_partition(self, partition):
-        self._current_partition = partition['name']
-        self._status[self._current_partition] = {}
-        self._current_source_device = self.DEVICE_PATH + self._current_partition
-        self._current_img_file = self._current_partition.replace(self.disk, self.IMAGE_PREFIX) + self.IMAGE_SUFFIX
-        self._current_target = self.path + self._current_img_file
-        self._current_fs = partition['fs']
 
 
 class _PartcloneOutputParser(OutputParser):

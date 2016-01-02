@@ -26,7 +26,6 @@ class DiskDetectTest(unittest.TestCase):
     def test_detect_layout(self, execute_mock):
         execute = Mock()
         execute_mock.return_value = execute
-        # disk = DiskLayout()
         execute.output.return_value = 'Partition Table: msdos'
         self.assertEqual('MBR', self.disk.detect_layout())
         execute.output.return_value = 'Partition Table: gpt'
@@ -64,9 +63,10 @@ class DiskDetectTest(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.disk._restore_gpt_layout()
 
-    def test_restore_mbr_layout(self):
-        with self.assertRaises(NotImplementedError):
-            self.disk._restore_mbr_layout()
+    # TODO: write new partition table restoration test
+    # def test_restore_mbr_layout(self):
+    #     with self.assertRaises(NotImplementedError):
+    #         self.disk._restore_mbr_layout()
 
     @patch('src.diskutils.parttable.path')
     @patch('src.diskutils.parttable.Execute')

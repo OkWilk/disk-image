@@ -2,7 +2,7 @@
 
 import unittest
 from unittest.mock import Mock, patch
-from src.api.resources.backup import Backup
+from src.api.resources.job import Job
 
 
 class BackupTest(unittest.TestCase):
@@ -11,5 +11,5 @@ class BackupTest(unittest.TestCase):
         pass
 
     def test_start(self):
-        backup = Backup()
-        self.assertTrue(backup)
+        job = Job()
+        self.assertTrue(job)

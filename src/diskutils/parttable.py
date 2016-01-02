@@ -38,18 +38,18 @@ class DiskLayout:
 
     def backup_layout(self):
         layout = self.detect_layout()
-        if layout is 'MBR':
+        if layout == 'MBR':
             self._backup_mbr_layout()
-        elif layout is 'GPT':
+        elif layout == 'GPT':
             self._backup_gpt_layout()
         else:
             raise Exception("Unrecognized partition layout detected.")
 
-    def restore_layout(self):
-        layout = 'MBR'
-        if layout is 'MBR':
+    def restore_layout(self, layout):
+        print(layout)
+        if layout == 'MBR':
             self._restore_mbr_layout()
-        elif layout is 'GPT':
+        elif layout == 'GPT':
             self._restore_gpt_layout()
         else:
             raise Exception("Unrecognized partition layout detected.")
@@ -64,7 +64,7 @@ class DiskLayout:
     def _restore_mbr_layout(self):
         self._restore_mbr()
         self._restore_mbr_partition_table()
-        self._refresh_partition_table()
+        # self._refresh_partition_table()
 
     def _restore_gpt_layout(self):
         raise NotImplementedError

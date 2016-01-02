@@ -5,24 +5,39 @@ Date: 30/11/2015
 import unittest
 import time
 from unittest.mock import Mock, patch
-from src.diskutils.controller import ProcessController
+from src.diskutils.controller import ProcessController, BackupController, RestorationController
+
+# TODO: add ProcessController tests.
 
 
-class ProcessControllerTest(unittest.TestCase):
-    DRIVE = 'drive'
+class BackupControllerTest(unittest.TestCase):
+    DRIVE = 'sda'
     JOB = 'test_job'
+    DEFAULT_CONFIG = {
+        'overwrite': False,
+        'rescue': False,
+        'space_check': True,
+        'fs_check': True,
+        'crc_check': True,
+        'force': False,
+        'refresh_delay': 5,
+        'compress': False,
+    }
 
     @patch('src.diskutils.controller.PartitionImage')
     @patch('src.diskutils.controller.DiskLayout')
+    # @patch('src.diskutils.controller.detect_disks')
     def setUp(self, layout_mock, image_mock):
         disk_layout = Mock()
         disk_layout.detect_layout.return_value = 'MBR'
         layout_mock.with_config.return_value = disk_layout
         partition_image = Mock()
         partition_image.get_status.return_value = ''
-        image_mock.return_value = partition_image
-        self.controller = ProcessController(self.DRIVE, self.JOB, {})
+        image_mock.with_config.return_value = partition_image
+        self.controller = BackupController(self.DRIVE, self.JOB, self.DEFAULT_CONFIG)
         self.backup_path = self.controller.BACKUP_PATH + self.JOB + '/'
+
+    # TODO: add test_backup_controller_creates_backupset
 
     def test_status_is_initialized(self):
         self.assert_status()
@@ -59,6 +74,7 @@ class ProcessControllerTest(unittest.TestCase):
         self.controller.backup()
         self.assertTrue(self.controller._thread)
         self.controller._thread.join()
+        print(str(self.controller.get_status()))
         self.assert_status(status='finished', path=self.backup_path, layout='MBR',
                            start_time=True, end_time=True)
 
@@ -95,3 +111,5 @@ class ProcessControllerTest(unittest.TestCase):
 
     def _time_to_value(self, time_string:str):
         return time.strptime(time_string, '%d/%m/%Y %H:%M:%S')
+
+        # TODO: add RestorationController tests.

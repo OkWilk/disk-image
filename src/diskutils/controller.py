@@ -2,6 +2,7 @@
 Date: 30/11/2015
 """
 import logging
+from ast import literal_eval
 from abc import ABCMeta, abstractmethod
 from threading import Thread
 from os import path, makedirs, listdir
@@ -17,6 +18,7 @@ class ProcessController:
     __metaclass__ = ABCMeta
 
     DATE_FORMAT = '%d/%m/%Y %H:%M:%S'
+    BACKUPSET_FILE = 'backupset.cfg'
     BACKUP_PATH = '/tmp/'
     STATUS_RUNNING = 'running'
     STATUS_ERROR = 'error'
@@ -25,12 +27,12 @@ class ProcessController:
     def __init__(self, disk, job_id, config):
         self.disk = disk
         self.job_id = job_id
+        self.config = config
         self.backup_dir = self.BACKUP_PATH + str(job_id) + '/'
-        self._disk_layout = DiskLayout.with_config(self.disk, self.backup_dir, config)
-        self._imager = PartitionImage.with_config(self.disk, self.backup_dir, config)
         self._init_status()
         self.backupset = None
         self._thread = None
+        self._disk_layout = DiskLayout.with_config(self.disk, self.backup_dir, config)
 
     def get_status(self):
         self._update_status()
@@ -61,6 +63,8 @@ class BackupController(ProcessController):
         ProcessController.__init__(self, disk, job_id, config)
         self._status['operation'] = 'Backup'
         self._create_backupset()
+        self._imager = PartitionImage.with_config(self.disk, self.backup_dir,
+                                                  self.backupset, config)
 
     def run(self):
         self.backup()
@@ -94,6 +98,7 @@ class BackupController(ProcessController):
         self.backupset.partition_table = self.backup_dir + 'ptable.bak'
         self.backupset.boot_record = self.backup_dir + 'mbr.img'
         self.backupset.disk_size = disk_details['size']
+        self.backupset.compressed = self.config['compress']
         for partition in disk_details['partitions']:
             partition_number = partition['name'][-1]
             self.backupset.partitions.append(Partition(partition_number,
@@ -102,7 +107,8 @@ class BackupController(ProcessController):
     def _complete_backupset(self):
         self.backupset.creation_date = datetime.today().strftime(self.DATE_FORMAT)
         self.backupset.backup_size = sum(path.getsize(self.backup_dir + f) for f in listdir(self.backup_dir))
-        pprint(self.backupset.to_json())
+        with open(self.backup_dir + self.BACKUPSET_FILE, 'w') as fd:
+            fd.write(str(self.backupset.to_json()))
 
     def _create_backup_directory(self):
         if not path.exists(self.backup_dir):
@@ -115,10 +121,24 @@ class BackupController(ProcessController):
 
 
 class RestorationController(ProcessController):
-    def __init__(self, disk, backupset, config):
-        ProcessController.__init__(self, disk, backupset.id, config)
-        self.backupset = backupset
+    def __init__(self, disk, backup_id, config):
+        ProcessController.__init__(self, disk, backup_id, config)
+        self._load_backupset()
         self._status['operation'] = 'Restoration'
+        self._imager = PartitionImage.with_config(self.disk, self.backup_dir,
+                                                  self.backupset, config)
+
+    def _load_backupset(self):
+        backupset_path = self.backup_dir + self.BACKUPSET_FILE
+        if path.exists(backupset_path):
+            with open(backupset_path) as fd:
+                content = fd.read()
+                self.backupset = BackupSet.from_json(literal_eval(content))
+        else:
+            raise Exception('Could not open backup information.')
+
+    def run(self):
+        self.restore()
 
     def restore(self):
         self._thread = Thread(target=self._restore)
@@ -129,8 +149,8 @@ class RestorationController(ProcessController):
             self._status['status'] = self.STATUS_RUNNING
             self._status['start_time'] = datetime.today().strftime(self.DATE_FORMAT)
             self._status['path'] = self.backup_dir
-            self._status['layout'] = 'MBR'
-            self._disk_layout.restore_layout()
+            self._status['layout'] = self.backupset.disk_layout
+            self._disk_layout.restore_layout(self.backupset.disk_layout)
             self._imager.restore()
             self._status['status'] = self.STATUS_FINISHED
         except Exception as e:
