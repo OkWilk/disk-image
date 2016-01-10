@@ -37,6 +37,7 @@ class DiskLayout:
             return 'UNKNOWN'
 
     def backup_layout(self):
+        self._check_if_disk_exists_with_raise()
         layout = self.detect_layout()
         if layout == 'MBR':
             self._backup_mbr_layout()
@@ -46,7 +47,7 @@ class DiskLayout:
             raise Exception("Unrecognized partition layout detected.")
 
     def restore_layout(self, layout):
-        print(layout)
+        self._check_if_disk_exists_with_raise()
         if layout == 'MBR':
             self._restore_mbr_layout()
         elif layout == 'GPT':
@@ -93,6 +94,10 @@ class DiskLayout:
                           ', target:' + self.target_dir)
         if not path.exists(target_file):
             raise Exception('Partition layout backup not created!')
+
+    def _check_if_disk_exists_with_raise(self):
+        if not path.exists('/dev/' + self.disk):
+            raise Exception('The disk ' + self.disk + ' is unavailable.')
 
     def _check_if_file_exists_with_raise(self, file, error_message):
         if path.exists(file) and not self.overwrite:

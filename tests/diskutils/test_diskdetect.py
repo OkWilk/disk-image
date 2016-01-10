@@ -9,16 +9,19 @@ class DiskDetectTest(unittest.TestCase):
         self.parser = diskdetect._LsblkOutputParser()
 
     def test_detect_disks(self):
-        result = diskdetect.detect_disks()
+        result = diskdetect.get_disk_list()
         self.assertTrue('sda' in str(result))
         self.assertTrue('sda1' in str(result))
+
+#TODO: test get disk details
+#TODO: test get disk details returns exception
 
     def test_ignore_list_works(self):
         test_str = 'KNAME="sda" TYPE="loop" FSTYPE="test_val" \
                     SIZE="256060514304"'
         self.parser.parse(test_str)
         self.assertFalse('sda' in str(self.parser.output))
-        self.assertEqual({}, self.parser.output)
+        self.assertEqual([], self.parser.output)
 
     def test_extract_pairs_to_dict(self):
         test_str = 'KNAME="sda" TYPE="disk" FSTYPE="test_val" \

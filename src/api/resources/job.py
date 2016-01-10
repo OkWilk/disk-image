@@ -1,5 +1,6 @@
 from flask_restful import Resource, abort, reqparse, fields, marshal_with, request
 from diskutils.controller import ProcessController, BackupController, RestorationController
+import constants
 
 BACKUP_OPERATION = 'Backup'
 RESTORATION_OPERATION = 'Restoration'
@@ -23,12 +24,11 @@ class Job(Resource):
     _parser.add_argument('compress', type=bool, location='json')
 
     def get(self):
-        payload = {}
+        payload = []
         details = JobDetails()
         if _jobs:
             for key in _jobs.keys():
-                payload[key] = {'disk': _jobs[key]['disk']}
-                payload[key]['details'] = details.get(key)
+                payload.append(details.get(key))
         return payload
 
     def post(self):
@@ -87,7 +87,12 @@ class Job(Resource):
 class JobDetails(Resource):
     def get(self, job_id):
         if job_id in _jobs:
-            return _jobs[job_id]['controller'].get_status()
+            payload = {
+                'id': job_id,
+                'disk': _jobs[job_id]['disk']
+            }
+            payload.update(_jobs[job_id]['controller'].get_status())
+            return payload
         else:
             abort(400, message="Error: Invalid input detected.")
 
@@ -100,7 +105,7 @@ class JobDetails(Resource):
 
     def _finish_backup(self, job_id):
         status = self.get(job_id)
-        if status['status'] == ProcessController.STATUS_FINISHED:
+        if status['status'] == constants.STATUS_FINISHED:
             _jobs.pop(job_id)
             return 'OK', 200
         else:  # TODO: allow terminating jobs and deleting them.

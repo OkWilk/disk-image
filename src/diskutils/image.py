@@ -2,6 +2,7 @@
 Date: 05/11/2015
 """
 import logging
+from os import path
 from .runcommand import OutputParser, Execute
 
 
@@ -53,7 +54,7 @@ class PartitionImage:
             'refresh_delay': refresh_delay,
             'compress': compress
         }
-        self._status = {}
+        self._status = []
         self._current_partition = ""
         self._init_status()
 
@@ -94,36 +95,47 @@ class PartitionImage:
         self._current_fs = partition.file_system
 
     def _run_process(self):
-        self._status[self._current_partition]['status'] = self.STATUS_RUNNING
+        self._get_partition_status(self._current_partition)['status'] = self.STATUS_RUNNING
         try:
-            self._runner.run()
-            self._handle_exit_code(self._runner.poll())
+            if path.exists(self._current_device):
+                self._runner.run()
+                self._handle_exit_code(self._runner.poll())
+            else:
+                raise ImageError('The device ' + self._current_device + ' is unavailable.')
         except Exception as e:
-            self._status[self._current_partition]['status'] = self.STATUS_ERROR
+            self._get_partition_status(self._current_partition)['status'] = self.STATUS_ERROR
             raise Exception('Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
 
     def _get_disk_info(self, disk:str):
         """Retrieves information regarding the specified disk."""
+        print("Warning: this function will be removed! _get_disk_info in imager.py")
         return detect_disks()[disk]
 
     def _init_status(self):
         """Initializes the status information with all partitions detected for
         the target disk. The status for each partition is set to pending."""
         for partition in self.backupset.partitions:
-            self._status[self.disk + partition.id] = {
+            self._status.append({
                 'name': self.disk + partition.id,
                 'status': self.STATUS_PENDING,
                 'completed': '0',
                 'elapsed': '00:00:00',
                 'remaining': '00:00:00',
-            }
+            })
 
     def _update_status(self):
         """Retrieves newest output from output parser and includes it with the
         status information."""
         if self._current_partition and self._runner and self._runner.output():
-            self._status[self._current_partition].update(self._runner.output())
-            self._status[self._current_partition]['name'] = self._current_partition
+            partition_status = self._get_partition_status(self._current_partition)
+            partition_status.update(self._runner.output())
+            partition_status['name'] = self._current_partition
+
+    def _get_partition_status(self, target):
+        for partition in self._status:
+            if partition['name'] == target:
+                return partition
+        raise Exception
 
     def _get_backup_runner(self):
         if self.config['compress']:
@@ -138,12 +150,9 @@ class PartitionImage:
             return Execute(command, _PartcloneOutputParser(), use_pty=True)
 
     def _get_restoration_runner(self):
-        if self.backupset.compressed:
-            raise NotImplementedError
-        else:
-            command = self._restore_command(self._current_image_file,
-                                           self._current_device, self._current_fs)
-            return Execute(command, _PartcloneOutputParser(), use_pty=True)
+        command = self._restore_command(self._current_image_file,
+                                       self._current_device, self._current_fs)
+        return Execute(command, _PartcloneOutputParser(), use_pty=True)
 
     def _backup_command(self, source:str, target:str, fs:str):
         """Creates a backup command for specified partition
@@ -216,7 +225,7 @@ class PartitionImage:
         return command
 
     def _handle_exit_code(self, exit_code):
-        partition_details = self._status[self._current_partition]
+        partition_details = self._get_partition_status(self._current_partition)
         if exit_code == 0:
             self._update_status()
             partition_details['status'] = self.STATUS_FINISHED

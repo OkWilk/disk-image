@@ -7,6 +7,28 @@ import re
 import logging
 
 _LSBLK_COLUMNS = ['KNAME', 'TYPE', 'FSTYPE', 'SIZE']
+_COMMAND = ['lsblk', '--output', ','.join(_LSBLK_COLUMNS), '--pairs', '--bytes']
+
+
+def _detect_disks():
+    runner = Execute(_COMMAND, _LsblkOutputParser())
+    runner.run()
+    return runner.output()
+
+
+def get_disk_list():
+    """Detects disks recognised by the operating system and returns them along
+    with additional information such as size, partitions and file systems."""
+    return _detect_disks()
+
+
+def get_disk_details(disk_id):
+    disk_list = _detect_disks()
+    for disk in disk_list:
+        print(str(disk['name']) + ' == ' +str(disk_id) + '=' + str(disk['name'] == disk_id))
+        if disk['name'] == disk_id:
+            return disk
+    raise ValueError("Disk " + disk + " was not detected by the system.")
 
 
 class _LsblkOutputParser(OutputParser):
@@ -31,7 +53,6 @@ class _LsblkOutputParser(OutputParser):
                 extracted = self._extract_pairs_to_dict(line)
                 parsed_lines.append(extracted)
         devices = self._group_by_device(parsed_lines)
-        devices = self._remove_ignored_device_types(devices)
         self.output = devices
 
     def _extract_pairs_to_dict(self, line:str) -> dict:
@@ -56,36 +77,27 @@ class _LsblkOutputParser(OutputParser):
 
     def _group_by_device(self, extracted:list) -> dict:
         """Processes the list of drives and partitions in order to group them."""
-        result = dict()
+        result = []
         for record in extracted:
-            if not(record['TYPE'] == 'part'):
-                partitions = list()
-                name = record['KNAME']
-                result[name] = {
-                    'size': record['SIZE'],
-                    'type': record['TYPE'],
-                    'partitions': partitions
-                }
-            else:
-                partition = {
-                    'name': record['KNAME'],
-                    'size': record['SIZE'],
-                    'fs': record['FSTYPE']
-                }
-                partitions.append(partition)
+            if self._is_accepted_device_type(record['TYPE']):
+                if not(record['TYPE'] == 'part'):
+                    partitions = list()
+                    name = record['KNAME']
+                    record = {
+                        'name': record['KNAME'],
+                        'size': record['SIZE'],
+                        'type': record['TYPE'],
+                        'partitions': partitions
+                    }
+                    result.append(record)
+                else:
+                    partition = {
+                        'name': record['KNAME'],
+                        'size': record['SIZE'],
+                        'fs': record['FSTYPE']
+                    }
+                    partitions.append(partition)
         return result
 
-    def _remove_ignored_device_types(self, devices:dict) -> dict:
-        """Returns a new dictionary without the ignored devices specified
-        in the ignored_devices list"""
-        return {i:devices[i] for i in devices if devices[i]['type']
-                not in self.ignore_list}
-
-
-def detect_disks() -> dict:
-    """Detects disks recognised by the operating system and returns them along
-    with additional information such as size, partitions and file systems."""
-    command = ['lsblk', '--output', ','.join(_LSBLK_COLUMNS), '--pairs', '--bytes']
-    runner = Execute(command, _LsblkOutputParser())
-    runner.run()
-    return runner.output()
+    def _is_accepted_device_type(self, device):
+        return device not in self.ignore_list
