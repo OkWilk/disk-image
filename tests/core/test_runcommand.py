@@ -2,7 +2,7 @@ import unittest
 from errno import EIO
 from unittest.mock import Mock, patch, mock_open
 from threading import Thread
-from src.diskutils.runcommand import Execute, OutputParser, OutputToFileConverter
+from src.core.runcommand import Execute, OutputParser, OutputToFileConverter
 from time import sleep
 
 
@@ -66,21 +66,21 @@ class RunCommandTest(unittest.TestCase):
         execute.process.poll.return_value = 0
         self.assertEqual(0, execute.poll())  # process finished
 
-    @patch('src.diskutils.runcommand.os')
+    @patch('src.core.runcommand.os')
     def test_EIO_do_not_raise_exception(self, mock_os):
         execute = Execute(['echo'], use_pty=True)
         mock_os.read.side_effect = IOError(EIO, None)
         execute.run()
         self.assertTrue(mock_os.read.called)
 
-    @patch('src.diskutils.runcommand.os')
+    @patch('src.core.runcommand.os')
     def test_non_EIO_raises_exception(self, mock_os):
         execute = Execute(['echo'], use_pty=True)
         mock_os.read.side_effect = IOError("test")
         with self.assertRaises(IOError):
             execute.run()
 
-    @patch('src.diskutils.runcommand.os')
+    @patch('src.core.runcommand.os')
     def test_exit_process_when_no_more_output_is_generated(self, mock_os):
         mock_os.read.return_value = ""
         execute = Execute(['echo'], use_pty=True)
@@ -111,7 +111,7 @@ class OutputToFileConverterTest(unittest.TestCase):
         converter = OutputToFileConverter('file.txt')
         data = 'some data'
         mock = mock_open()
-        with patch('src.diskutils.runcommand.open', mock, create=True):
+        with patch('src.core.runcommand.open', mock, create=True):
             converter.parse(data)
         self.assertEqual(data, converter.output)
         handle = mock()

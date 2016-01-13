@@ -1,4 +1,5 @@
-"""Author: Oktawiusz Wilk
+"""
+Author: Oktawiusz Wilk
 Date: 05/11/2015
 """
 
@@ -7,34 +8,12 @@ import re
 import logging
 
 _LSBLK_COLUMNS = ['KNAME', 'TYPE', 'FSTYPE', 'SIZE']
-_COMMAND = ['lsblk', '--output', ','.join(_LSBLK_COLUMNS), '--pairs', '--bytes']
-
-
-def _detect_disks():
-    runner = Execute(_COMMAND, _LsblkOutputParser())
-    runner.run()
-    return runner.output()
-
-
-def get_disk_list():
-    """Detects disks recognised by the operating system and returns them along
-    with additional information such as size, partitions and file systems."""
-    return _detect_disks()
-
-
-def get_disk_details(disk_id):
-    disk_list = _detect_disks()
-    for disk in disk_list:
-        print(str(disk['name']) + ' == ' +str(disk_id) + '=' + str(disk['name'] == disk_id))
-        if disk['name'] == disk_id:
-            return disk
-    raise ValueError("Disk " + disk + " was not detected by the system.")
 
 
 class _LsblkOutputParser(OutputParser):
     """The specialised parsing class to be used with lsblk list outputs."""
 
-    def __init__(self, ignore_list:list=['loop', 'rom']):
+    def __init__(self, ignore_list:list=['nbd', 'loop', 'rom']):
         """Add parsing configuration to the object.
         ignore_list - a list of device types to be ignored: drive, part, loop, rom
         """
@@ -79,7 +58,7 @@ class _LsblkOutputParser(OutputParser):
         """Processes the list of drives and partitions in order to group them."""
         result = []
         for record in extracted:
-            if self._is_accepted_device_type(record['TYPE']):
+            if self._is_accepted(record):
                 if not(record['TYPE'] == 'part'):
                     partitions = list()
                     name = record['KNAME']
@@ -99,5 +78,37 @@ class _LsblkOutputParser(OutputParser):
                     partitions.append(partition)
         return result
 
-    def _is_accepted_device_type(self, device):
-        return device not in self.ignore_list
+    def _is_accepted(self, record):
+        if record['TYPE'] in self.ignore_list:
+            return False
+        for ignored in self.ignore_list:
+            if ignored in record['KNAME']:
+                return False
+        return True
+
+
+class _DiskDetect:
+    _COMMAND = ['lsblk', '--output', ','.join(_LSBLK_COLUMNS), '--pairs', '--bytes']
+
+    def __init__(self):
+        self._runner = Execute(self._COMMAND, _LsblkOutputParser())
+
+    def get_disk_list(self):
+        """Detects disks recognised by the operating system and returns them along
+        with additional information such as size, partitions and file systems."""
+        return self._detect_disks()
+
+    def get_disk_details(self, disk_id):
+        disk_list = self._detect_disks()
+        for disk in disk_list:
+            if disk['name'] == disk_id:
+                return disk
+        raise ValueError("Disk " + disk_id + " was not detected by the system.")
+
+    def _detect_disks(self):
+        self._runner.run()
+        return self._runner.output()
+
+
+# Export as singleton
+DiskDetect = _DiskDetect()

@@ -1,10 +1,9 @@
-from flask_restful import Resource, abort, reqparse, fields, marshal_with, request
-from diskutils.controller import ProcessController, BackupController, RestorationController
+from flask_restful import Resource, abort, reqparse
+from core.controller import BackupController, RestorationController
 import constants
 
 BACKUP_OPERATION = 'Backup'
 RESTORATION_OPERATION = 'Restoration'
-MOUNT_OPERATION = 'Mount'
 
 _jobs = {}
 
@@ -47,8 +46,6 @@ class Job(Resource):
             return BackupController(disk, job_id, config)
         elif operation == RESTORATION_OPERATION:
             return RestorationController(disk, job_id, config)
-        elif operation == MOUNT_OPERATION:
-            raise NotImplementedError()
 
     def _build_config_from_request_args(self, args):
         config = self._build_config_with_defaults()

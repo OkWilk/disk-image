@@ -2,6 +2,7 @@
 Date: 06/11/2015
 """
 import logging
+import constants
 from os import path
 from .runcommand import Execute, OutputToFileConverter
 
@@ -71,7 +72,7 @@ class DiskLayout:
         raise NotImplementedError
 
     def _backup_mbr(self):
-        target_file = self.target_dir + self.MBR_TARGET_FILE
+        target_file = self.target_dir + constants.BOOT_RECORD_FILE
         self._check_if_file_exists_with_raise(target_file,
             'Existing MBR backup detected at ' + target_file + '. Not overwritting.')
         dd_command = ['dd', 'if=/dev/' + self.disk, 'of=' + target_file, 'bs=' +
@@ -80,18 +81,20 @@ class DiskLayout:
         if(dd.run() != 0):
             logging.error('MBR backup failed, disk:' + self.disk + ', target:' +
                           self.target_dir)
+            raise Exception('MBR backup did not finish successfully.')
         if not path.exists(target_file):
             raise Exception('MBR backup file not created!')
 
     def _backup_mbr_partition_table(self):
         sfdisk_command = ['sfdisk', '-d', '/dev/' + self.disk]
-        target_file = self.target_dir + self.PARTITION_TABLE_TARGET_FILE
+        target_file = self.target_dir + constants.PARTITION_TABLE_FILE
         self._check_if_file_exists_with_raise(target_file,
             'Existing backup detected at ' + target_file + '. Not overwritting.')
         sfdisk = Execute(sfdisk_command, OutputToFileConverter(target_file))
         if(sfdisk.run() != 0):
             logging.error('Partition table backup failed, disk:' + self.disk +
                           ', target:' + self.target_dir)
+            raise Exception('Partition layout backup did not finish successfully.')
         if not path.exists(target_file):
             raise Exception('Partition layout backup not created!')
 
@@ -105,8 +108,9 @@ class DiskLayout:
             raise Exception(error_message)
 
     def _restore_mbr(self):
-        source_file = self.target_dir + self.MBR_TARGET_FILE
-        print(str(source_file))
+        source_file = self.target_dir + constants.BOOT_RECORD_FILE
+        if not path.exists(source_file):
+            raise Exception('MBR backup is missing.')
         dd_command = ['dd', 'if=' + source_file, 'of=/dev/' + self.disk]
         dd = Execute(dd_command)
         if(dd.run() != 0):
@@ -114,7 +118,9 @@ class DiskLayout:
                           ', target: ' + self.disk)
 
     def _restore_mbr_partition_table(self):
-        source_file = self.target_dir + self.PARTITION_TABLE_TARGET_FILE
+        source_file = self.target_dir + constants.PARTITION_TABLE_FILE
+        if not path.exists(source_file):
+            raise Exception('Partition layout backup is missing.')
         sfdisk_command = "sfdisk -f /dev/" + self.disk + ' < ' + source_file
         sfdisk = Execute(sfdisk_command, shell=True)
         if(sfdisk.run() != 0):

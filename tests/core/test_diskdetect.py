@@ -1,20 +1,33 @@
-import unittest
+from unittest import TestCase
 from unittest.mock import Mock, patch
-import src.diskutils.diskdetect as diskdetect
+from src.core.diskdetect import DiskDetect, _LsblkOutputParser
 
 
-class DiskDetectTest(unittest.TestCase):
+class DiskDetectTest(TestCase):
 
     def setUp(self):
-        self.parser = diskdetect._LsblkOutputParser()
+        self.diskdetect = DiskDetect
+        # self.parser = diskdetect._LsblkOutputParser()
 
     def test_detect_disks(self):
-        result = diskdetect.get_disk_list()
+        result = self.diskdetect.get_disk_list()
         self.assertTrue('sda' in str(result))
         self.assertTrue('sda1' in str(result))
+        self.assertFalse('sr0' in str(result))
 
-#TODO: test get disk details
-#TODO: test get disk details returns exception
+    def test_get_disk_details(self):
+        result = self.diskdetect.get_disk_details('sda')
+        self.assertTrue(result)
+
+    def test_get_disk_details_raises_on_invalid_disk(self):
+        with self.assertRaises(ValueError):
+            self.diskdetect.get_disk_details('xxx')
+
+
+class LsblkParserTest(TestCase):
+
+    def setUp(self):
+        self.parser = _LsblkOutputParser()
 
     def test_ignore_list_works(self):
         test_str = 'KNAME="sda" TYPE="loop" FSTYPE="test_val" \
@@ -44,7 +57,7 @@ class DiskDetectTest(unittest.TestCase):
         self.assertEqual('256060514304', extracted['SIZE'])
         self.assertFalse('TYPE' in extracted)
 
-    @patch('src.diskutils.diskdetect.logging')
+    @patch('src.core.diskdetect.logging')
     def test_extract_pairs_with_missing_name_raises_exception(self, log_mock):
         test_str = 'TYPE="disk" FSTYPE="test_val" SIZE="256060514304"'
         with self.assertRaises(ValueError):

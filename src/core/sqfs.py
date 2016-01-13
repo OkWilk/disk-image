@@ -1,6 +1,5 @@
 import constants
 from os import path, mkdir, remove
-from time import sleep
 from shutil import rmtree
 from .runcommand import Execute
 

@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import Mock, patch
-from src.backupset import BackupSet
-import src.diskutils.image as image
+from src.core.backupset import BackupSet
+import src.core.image as image
+import src.constants as constants
 
 
 
@@ -48,11 +49,11 @@ class ImageTest(unittest.TestCase):
                          self.clone._select_command_by_fs('invalid'))
 
     def test_init_status(self):
-        self.assertTrue('sdxx1' in self.clone._status)
-        self.assertEqual(self.clone.STATUS_PENDING, self.clone._status['sdxx1']['status'])
+        self.assertTrue('sdxx1' in str(self.clone._status))
+        self.assertEqual(constants.STATUS_PENDING, self.clone._get_partition_status('sdxx1')['status'])
 
     def test_get_status(self):
-        self.assertTrue('sdxx1' in self.clone.get_status())
+        self.assertTrue('sdxx1' in str(self.clone.get_status()))
 
     def test_image_created_with_config(self):
         config = {
@@ -80,7 +81,7 @@ class ImageTest(unittest.TestCase):
                            force=config['force'], refresh_delay=config['refresh_delay'],
                            compress=config['compress'])
 
-    @patch('src.diskutils.image.logging')
+    @patch('src.core.image.logging')
     def test_image_with_config_raises_on_missing_key(self, logger_mock):
         config = {'overwrite': True, 'random': False}
         with self.assertRaises(Exception):
@@ -147,8 +148,9 @@ class ImageTest(unittest.TestCase):
         self.assertTrue('-r' in command)
         self.assertFalse('-c' in command)
 
-    @patch('src.diskutils.image.Execute')
-    def test_backup(self, exec_class):
+    @patch('src.core.image.path')
+    @patch('src.core.image.Execute')
+    def test_backup(self, exec_class, path_mock):
         exec_mock = Mock()
         exec_mock.poll.return_value = 0
         exec_class.return_value = exec_mock
@@ -158,12 +160,13 @@ class ImageTest(unittest.TestCase):
             "rate": "817.66mb/min",
             "remaining": "00:00:00",
         }
+        path_mock.exists.return_value = True
         self.clone.backup()
         self.assertEqual(1, exec_mock.run.call_count)
         self.assertEqual(1, exec_class.call_count)
-        self.assertEqual(self.clone.STATUS_FINISHED, self.clone._status['sdxx1']['status'])
+        self.assertEqual(constants.STATUS_FINISHED, self.clone._get_partition_status('sdxx1')['status'])
 
-    @patch('src.diskutils.image.Execute')
+    @patch('src.core.image.Execute')
     def test_backup_raises_on_error(self, execute_mock):
         runner = Mock()
         runner.run.side_effect = Exception('Something went wrong')
@@ -175,7 +178,7 @@ class ImageTest(unittest.TestCase):
         self.clone._update_status = Mock()
         self.clone._current_partition = 'sdxx1'
         self.clone._handle_exit_code(0)
-        self.assertEqual('finished', self.clone._status['sdxx1']['status'])
+        self.assertEqual('finished', self.clone._get_partition_status('sdxx1')['status'])
         self.assertTrue(self.clone._update_status.called)
 
     def test_handle_exit_code_with_error(self):
@@ -197,7 +200,7 @@ class PartcloneOutputParserTest(unittest.TestCase):
     def setUp(self):
         self.parser = image._PartcloneOutputParser()
 
-    @patch('src.diskutils.image.logging')
+    @patch('src.core.image.logging')
     def test_check_for_errors(self, log_mock):
         string = 'open target fail /tmp/part1.img: file exists (17)'
         with self.assertRaises(image.ImageError):
@@ -219,7 +222,7 @@ class PartcloneOutputParserTest(unittest.TestCase):
                                '00:01:20', '50.2')
         self._parse_and_assert('', '00:01:22', '00:01:20', '50.2')
 
-    @patch('src.diskutils.image.logging')
+    @patch('src.core.image.logging')
     def test_parse_checks_for_errors(self, log_mock):
         with self.assertRaises(image.ImageError):
             self.parser.parse('open target fail /tmp/part1.img: file exists (17)')

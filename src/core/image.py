@@ -2,6 +2,7 @@
 Date: 05/11/2015
 """
 import logging
+import constants
 from os import path
 from .runcommand import OutputParser, Execute
 
@@ -14,13 +15,7 @@ class PartitionImage:
     """
 
     CURRENT_PARTITION = 'current_partition'
-    STATUS_PENDING = 'pending'
-    STATUS_RUNNING = 'running'
-    STATUS_FINISHED = 'finished'
-    STATUS_ERROR = 'error'
     DEVICE_PATH = '/dev/'
-    IMAGE_PREFIX = 'part'
-    IMAGE_SUFFIX = '.img'
 
     _fs_to_command = {
         'ntfs': 'partclone.ntfs',
@@ -56,6 +51,7 @@ class PartitionImage:
         }
         self._status = []
         self._current_partition = ""
+        self._runner = None
         self._init_status()
 
     @classmethod
@@ -91,11 +87,11 @@ class PartitionImage:
     def _prepare_partition_info(self, partition):
         self._current_partition = self.disk + partition.id
         self._current_device = self.DEVICE_PATH + self._current_partition
-        self._current_image_file = self.path + self.IMAGE_PREFIX + partition.id + self.IMAGE_SUFFIX
+        self._current_image_file = self.path + constants.PARTITION_FILE_PREFIX + partition.id + constants.PARTITION_FILE_SUFFIX
         self._current_fs = partition.file_system
 
     def _run_process(self):
-        self._get_partition_status(self._current_partition)['status'] = self.STATUS_RUNNING
+        self._get_partition_status(self._current_partition)['status'] = constants.STATUS_RUNNING
         try:
             if path.exists(self._current_device):
                 self._runner.run()
@@ -103,13 +99,8 @@ class PartitionImage:
             else:
                 raise ImageError('The device ' + self._current_device + ' is unavailable.')
         except Exception as e:
-            self._get_partition_status(self._current_partition)['status'] = self.STATUS_ERROR
+            self._get_partition_status(self._current_partition)['status'] = constants.STATUS_ERROR
             raise Exception('Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
-
-    def _get_disk_info(self, disk:str):
-        """Retrieves information regarding the specified disk."""
-        print("Warning: this function will be removed! _get_disk_info in imager.py")
-        return detect_disks()[disk]
 
     def _init_status(self):
         """Initializes the status information with all partitions detected for
@@ -117,7 +108,7 @@ class PartitionImage:
         for partition in self.backupset.partitions:
             self._status.append({
                 'name': self.disk + partition.id,
-                'status': self.STATUS_PENDING,
+                'status': constants.STATUS_PENDING,
                 'completed': '0',
                 'elapsed': '00:00:00',
                 'remaining': '00:00:00',
@@ -228,9 +219,9 @@ class PartitionImage:
         partition_details = self._get_partition_status(self._current_partition)
         if exit_code == 0:
             self._update_status()
-            partition_details['status'] = self.STATUS_FINISHED
+            partition_details['status'] = constants.STATUS_FINISHED
         else:
-            partition_details['status'] = self.STATUS_ERROR
+            partition_details['status'] = constants.STATUS_ERROR
             raise Exception('The imaging did not finish successfully.')
 
 
