@@ -22,7 +22,7 @@ class MongoConnector:
 
         Return the database cursor to the context manager.
         """
-        self.client = pymongo.MongoClient()
+        self.client = pymongo.MongoClient(self.config['Host'])
         return self.client[self.config['Database']]
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
