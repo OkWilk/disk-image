@@ -3,3 +3,4 @@ notes
 *.ipynb
 *.pyc
 */__pycache__/*
+.idea/

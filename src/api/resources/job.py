@@ -22,13 +22,29 @@ class Job(Resource):
     _parser.add_argument('refresh_delay', type=int, location='json')
     _parser.add_argument('compress', type=bool, location='json')
 
-    def get(self):
+    def get(self, job_id=None):
+        if job_id:
+            return self._get_job_details(job_id)
+        else:
+            return self._get_job_list()
+
+    def _get_job_list(self):
         payload = []
-        details = JobDetails()
         if _jobs:
             for key in _jobs.keys():
-                payload.append(details.get(key))
+                payload.append(self._get_job_details(key))
         return payload
+
+    def _get_job_details(self, job_id):
+        if job_id in _jobs:
+            payload = {
+                'id': job_id,
+                'disk': _jobs[job_id]['disk']
+            }
+            payload.update(_jobs[job_id]['controller'].get_status())
+            return payload
+        else:
+            return "The requested resource is unavailable.", 404
 
     def post(self):
         args = self._parser.parse_args(strict=True)
@@ -80,30 +96,17 @@ class Job(Resource):
         }
         return config
 
-
-class JobDetails(Resource):
-    def get(self, job_id):
-        if job_id in _jobs:
-            payload = {
-                'id': job_id,
-                'disk': _jobs[job_id]['disk']
-            }
-            payload.update(_jobs[job_id]['controller'].get_status())
-            return payload
-        else:
-            abort(400, message="Error: Invalid input detected.")
-
     def delete(self, job_id):
         if job_id in _jobs:
-            self._finish_backup(job_id)
-            return "OK", 200
+            return self._finish_backup(job_id)
         else:
-            abort(400, message="Error: Invalid resource requested.")
+            return "Error: Invalid resource requested.", 404
 
     def _finish_backup(self, job_id):
-        status = self.get(job_id)
-        if status['status'] == constants.STATUS_FINISHED:
+        status = self.get(job_id)['status']
+        if status == constants.STATUS_FINISHED or status == constants.STATUS_ERROR:
             _jobs.pop(job_id)
             return 'OK', 200
         else:  # TODO: allow terminating jobs and deleting them.
-            abort(400, message="Cannot abort job at this moment.")
+            return "Cannot abort job at this moment.", 400
+

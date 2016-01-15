@@ -54,7 +54,7 @@ class ProcessController:
 
     def _set_error(self, msg):
         self._status['status'] = constants.STATUS_ERROR
-        self._status['error_msg'] = msg
+        self._status['error_msg'] = str(msg)
 
     def _update_status(self):
         if self._imager:
@@ -76,20 +76,20 @@ class BackupController(ProcessController):
     def _remove_previous_backup(self):
         try:
             backupset = BackupSet.retrieve(self.job_id)
+            if backupset:
+                if backupset.deleted:
+                    self._db.remove_backup(self.job_id)
+                elif backupset.node == ConfigHelper.config['Node']['Name']:
+                    try:
+                        rmtree(backupset.backup_path)
+                        self._db.remove_backup(self.job_id)
+                    except Exception as e:
+                        self._set_error('Cannot remove backup, cause: ' + str(e))
+                else:
+                    self._set_error("The requested backup resides on a different node. " +
+                                    "Please delete it manually from backup list and start again.")
         except:
             pass
-        if backupset:
-            if backupset.deleted:
-                self._db.remove_backup(self.job_id)
-            elif backupset.node == ConfigHelper.config['Node']['Name']:
-                try:
-                    rmtree(backupset.backup_path)
-                    self._db.remove_backup(self.job_id)
-                except Exception as e:
-                    self._set_error('Cannot remove backup, cause: ' + str(e))
-            else:
-                self._set_error("The requested backup resides on a different node. " +
-                                "Please delete it manually from backup list and start again.")
 
     def _init_status(self):
         ProcessController._init_status(self)
@@ -183,8 +183,7 @@ class RestorationController(ProcessController):
             self._imager.restore()
             self._status['status'] = constants.STATUS_FINISHED
         except Exception as e:
-            self._status['status'] = constants.STATUS_ERROR
-            self._status['error_msg'] = str(e)
+            self._set_error(e)
             if self.backupset.compressed:
                 self._imager._runner.kill()
         finally:
@@ -223,7 +222,7 @@ class MountController:
 
     def _set_error(self, msg):
         self._status['status'] = constants.STATUS_ERROR
-        self._status['error_msg'] = msg
+        self._status['error_msg'] = str(msg)
 
     def mount(self):
         if self._can_mount():

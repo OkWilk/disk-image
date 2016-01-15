@@ -8,7 +8,6 @@ class Mount(Resource):
 
 
     def get(self, backup_id=None):
-        print("mounted:" + str(mounted))
         if backup_id:
             return self._get_mount_details(backup_id)
         else:
