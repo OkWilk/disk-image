@@ -16,7 +16,7 @@ from core.nbdpool import NBDPool
 from core.parttable import DiskLayout
 from core.sqfs import SquashWrapper
 from services.config import ConfigHelper
-from services.db import MongoDB
+from services.database import DB
 
 
 class ProcessController:
@@ -30,7 +30,6 @@ class ProcessController:
         self.backupset = None
         self._thread = None
         self._status = {}
-        self._db = MongoDB(ConfigHelper.config['Database'])
         self._disk_layout = DiskLayout.with_config(self.disk, self.backup_dir, config)
 
     def get_status(self):
@@ -78,11 +77,11 @@ class BackupController(ProcessController):
             backupset = BackupSet.retrieve(self.job_id)
             if backupset:
                 if backupset.deleted:
-                    self._db.remove_backup(self.job_id)
+                    DB.remove_backup(self.job_id)
                 elif backupset.node == ConfigHelper.config['Node']['Name']:
                     try:
                         rmtree(backupset.backup_path)
-                        self._db.remove_backup(self.job_id)
+                        DB.remove_backup(self.job_id)
                     except Exception as e:
                         self._set_error('Cannot remove backup, cause: ' + str(e))
                 else:
@@ -128,7 +127,7 @@ class BackupController(ProcessController):
         self.backupset.disk_size = disk_details['size']
         self.backupset.compressed = self.config['compress']
         self._add_partitions_to_backupset(disk_details['partitions'])
-        self._db.insert_backup(self.backupset.id, self.backupset.to_json())
+        DB.insert_backup(self.backupset.id, self.backupset.to_json())
 
     def _add_partitions_to_backupset(self, partitions):
         for partition in partitions:
@@ -139,7 +138,7 @@ class BackupController(ProcessController):
         self.backupset.status = self._status['status']
         self.backupset.creation_date = datetime.today().strftime(constants.DATE_FORMAT)
         self.backupset.backup_size = sum(path.getsize(self.backup_dir + f) for f in listdir(self.backup_dir))
-        self._db.update_backup(self.backupset.id, self.backupset.to_json())
+        DB.update_backup(self.backupset.id, self.backupset.to_json())
 
 
 class RestorationController(ProcessController):
@@ -152,7 +151,7 @@ class RestorationController(ProcessController):
                                                   self.backupset, config)
 
     def _load_backupset(self):  # TODO: replace with BACKUPSET.retrieve
-        data = self._db.get_backup(self.job_id)
+        data = DB.get_backup(self.job_id)
         if data:
             backupset = BackupSet.from_json(data)
             if backupset.node == ConfigHelper.config['Node']['Name']:

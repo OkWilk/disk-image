@@ -1,11 +1,10 @@
 import constants as constants
 from services.config import ConfigHelper
-from services.db import MongoDB
+from services.database import DB
 
 
 class BackupSet:
-    _DB = MongoDB(ConfigHelper.config['Database'])
-    
+
     def __init__(self, backup_id):
         self.id = backup_id
         self.node = ConfigHelper.config['Node']['Name']
@@ -22,7 +21,7 @@ class BackupSet:
 
     @classmethod
     def retrieve(cls, backup_id):
-        data = cls._DB.get_backup(backup_id)
+        data = DB.get_backup(backup_id)
         if data:
             backupset = cls.from_json(data)
             if backupset.node == ConfigHelper.config['Node']['Name']:

@@ -1,8 +1,9 @@
 from .mdbconnector import MongoConnector
+from .config import ConfigHelper
 from threading import Lock
 
 
-class DB:  # TODO: mark as abstract class
+class Database:  # TODO: mark as abstract class
     def __init__(self, config):
         self.lock = Lock()
         self.config = config
@@ -20,9 +21,7 @@ class DB:  # TODO: mark as abstract class
         pass
 
 
-class MongoDB(DB):
-    def __init__(self, config):
-        DB.__init__(self, config)
+class MongoDB(Database):
 
     def insert_backup(self, backup_id, data):
         self.lock.acquire()
@@ -49,5 +48,9 @@ class MongoDB(DB):
         with MongoConnector(self.config) as db:
             db.backup.remove({'id': backup_id})
 
+
 class ItemExistsException(Exception):
     pass
+
+
+DB = MongoDB(ConfigHelper.config['Database'])
