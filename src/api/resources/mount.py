@@ -49,7 +49,7 @@ class Mount(Resource):
         if backup_id in mounted.keys():
             return self._unmount_backup(backup_id)
         else:
-            return 'The specified backup is not mounted on this node.', 400
+            return 'The specified backup is not mounted.', 400
 
     def _unmount_backup(self, backup_id):
         try:

@@ -24,12 +24,8 @@ class BackupSet:
         data = DB.get_backup(backup_id)
         if data:
             backupset = cls.from_json(data)
-            if backupset.node == ConfigHelper.config['Node']['Name']:
-                return backupset
-            else:
-                raise Exception('This backup resides on another node, terminating.')
-        else:
-            raise Exception('Could not retrieve backup information.')
+            return backupset
+        raise Exception('Could not retrieve backup information.')
 
     @classmethod
     def from_json(cls, json):

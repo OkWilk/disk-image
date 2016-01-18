@@ -16,7 +16,7 @@ from core.nbdpool import NBDPool
 from core.parttable import DiskLayout
 from core.sqfs import SquashWrapper
 from services.config import ConfigHelper
-from services.database import DB
+from services.database import DB, ItemExistsException
 
 
 class ProcessController:
@@ -29,18 +29,8 @@ class ProcessController:
         self.backup_dir = constants.BACKUP_PATH + str(job_id) + '/'
         self.backupset = None
         self._thread = None
-        self._status = {}
+        self._imager = None
         self._disk_layout = DiskLayout.with_config(self.disk, self.backup_dir, config)
-
-    def get_status(self):
-        self._update_status()
-        return self._status
-
-    @abstractmethod
-    def run(self):
-        pass
-
-    def _init_status(self):
         self._status = {
             'status': '',
             'path': '',
@@ -50,6 +40,14 @@ class ProcessController:
             'end_time': '',
             'operation': '',
         }
+
+    def get_status(self):
+        self._update_status()
+        return self._status
+
+    @abstractmethod
+    def run(self):
+        pass
 
     def _set_error(self, msg):
         self._status['status'] = constants.STATUS_ERROR
@@ -65,8 +63,12 @@ class BackupController(ProcessController):
         ProcessController.__init__(self, disk, job_id, config)
         if self.config['overwrite']:
             self._remove_previous_backup()
-        self._create_backupset()
-        self._imager = PartitionImage.with_config(self.disk, self.backup_dir, self.backupset, config)
+        if self._status['status'] != constants.STATUS_ERROR:
+            try:
+                self._create_backupset()
+                self._imager = PartitionImage.with_config(self.disk, self.backup_dir, self.backupset, config)
+            except ItemExistsException as e:
+                self._set_error(e)
 
     def run(self):
         self._thread = Thread(target=self._backup)
@@ -86,12 +88,11 @@ class BackupController(ProcessController):
                         self._set_error('Cannot remove backup, cause: ' + str(e))
                 else:
                     self._set_error("The requested backup resides on a different node. " +
-                                    "Please delete it manually from backup list and start again.")
+                                    "Please use node: " + backupset.node + " for this backup overwrite.")
         except:
-            pass
+            self._set_error("Cannot retrieve backup information, try again later.")
 
     def _init_status(self):
-        ProcessController._init_status(self)
         self._status['operation'] = 'Backup'
         self._status['status'] = constants.STATUS_RUNNING
         self._status['start_time'] = datetime.today().strftime(constants.DATE_FORMAT)
@@ -99,17 +100,18 @@ class BackupController(ProcessController):
         self._status['layout'] = self.backupset.disk_layout
 
     def _backup(self):
-        try:
-            self._init_status()
-            self._create_backup_directory()
-            self._disk_layout.backup_layout()
-            self._imager.backup()
-            self._status['status'] = constants.STATUS_FINISHED
-        except Exception as e:
-            self._set_error(e)
-        finally:
-            self._status['end_time'] = datetime.today().strftime(constants.DATE_FORMAT)
-            self._complete_backupset()
+        if self._status['status'] != constants.STATUS_ERROR:
+            try:
+                self._init_status()
+                self._create_backup_directory()
+                self._disk_layout.backup_layout()
+                self._imager.backup()
+                self._status['status'] = constants.STATUS_FINISHED
+            except Exception as e:
+                self._set_error(e)
+            finally:
+                self._status['end_time'] = datetime.today().strftime(constants.DATE_FORMAT)
+                self._complete_backupset()
 
     def _create_backup_directory(self):
         if not path.exists(self.backup_dir):
@@ -166,7 +168,6 @@ class RestorationController(ProcessController):
         self._thread.start()
 
     def _init_status(self):
-        ProcessController._init_status(self)
         self._status['operation'] = 'Restoration'
         self._status['status'] = constants.STATUS_RUNNING
         self._status['start_time'] = datetime.today().strftime(constants.DATE_FORMAT)

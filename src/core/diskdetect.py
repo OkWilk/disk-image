@@ -4,6 +4,7 @@ Date: 05/11/2015
 """
 
 from .runcommand import Execute, OutputParser
+from threading import Lock
 import re
 import logging
 
@@ -92,6 +93,7 @@ class _DiskDetect:
 
     def __init__(self):
         self._runner = Execute(self._COMMAND, _LsblkOutputParser())
+        self._lock = Lock()
 
     def get_disk_list(self):
         """Detects disks recognised by the operating system and returns them along
@@ -106,8 +108,16 @@ class _DiskDetect:
         raise ValueError("Disk " + disk_id + " was not detected by the system.")
 
     def _detect_disks(self):
-        self._runner.run()
-        return self._runner.output()
+        self._lock.acquire()
+        try:
+            self._runner.run()
+            output = self._runner.output()
+        except Exception as e:
+            logging.error("Disk detection failed, e: " + str(e))
+            raise e
+        finally:
+            self._lock.release()
+        return output
 
 
 # Export as singleton

@@ -45,26 +45,22 @@ class _NBDPool:
                 self._nbd_nodes.append(NBDNode(constants.DEVICE_PATH + device))
 
     def acquire(self):
-        self._lock.acquire()
-        try:
-            node = self._nbd_nodes.pop()
-            self._used_nodes.append(node)
-            return node
-        except IndexError:
-            raise
-        finally:
-            self._lock.release()
+        with self._lock:
+            try:
+                node = self._nbd_nodes.pop()
+                self._used_nodes.append(node)
+                return node
+            except IndexError:
+                raise
 
     def release(self, node):
-        self._lock.acquire()
-        try:
-            self._used_nodes.remove(node)
-            node.reset()
-            self._nbd_nodes.append(node)
-        except:
-            raise
-        finally:
-            self._lock.release()
+        with self._lock:
+            try:
+                self._used_nodes.remove(node)
+                node.reset()
+                self._nbd_nodes.append(node)
+            except:
+                raise
 
 # initialise singleton
 NBDPool = _NBDPool()
