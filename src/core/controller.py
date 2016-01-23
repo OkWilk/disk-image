@@ -125,6 +125,7 @@ class BackupController(ProcessController):
     def _create_backupset(self):
         disk_details = DiskDetect.get_disk_details(self.disk)
         self.backupset = BackupSet(self.job_id)
+        self.backupset.creation_date = datetime.today().strftime(constants.DATE_FORMAT)
         self.backupset.disk_layout = self._disk_layout.detect_layout()
         self.backupset.disk_size = disk_details['size']
         self.backupset.compressed = self.config['compress']

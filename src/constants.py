@@ -16,3 +16,6 @@ PARTITION_TABLE_FILE = 'ptable.bak'
 BOOT_RECORD_FILE = 'boot.img'
 PARTITION_FILE_PREFIX = 'part'
 PARTITION_FILE_SUFFIX = '.img'
+
+# Interval Constants in seconds
+METRIC_INTERVAL = 5

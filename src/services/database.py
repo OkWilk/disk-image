@@ -33,9 +33,7 @@ class MongoDB(Database):
     def update_backup(self, backup_id, data):
         with self._lock:
             with MongoConnector(self.config) as db:
-                result = db.backup.update({'id': backup_id}, {'$set': data})
-                if result['n']:
-                    self.insert_backup(backup_id, data)
+                result = db.backup.update({'id': backup_id}, {'$set': data}, True)
 
     def get_backup(self, backup_id):
         with self._lock:

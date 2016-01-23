@@ -1,9 +1,11 @@
 from flask import Flask
-from flask_restful import Api, Resource, abort, reqparse, fields, marshal_with
+from flask_restful import Api
+
 from api.resources.disk import Disk
-from api.resources.job import Job
-from api.resources.mount import Mount
 from api.resources.heartbeat import Heartbeat
+from api.resources.job import Job
+from api.resources.monitor import Monitor
+from api.resources.mount import Mount
 
 app = Flask(__name__)
 api = Api(app)
@@ -20,6 +22,7 @@ def after_request(response):
     return response
 
 api.add_resource(Heartbeat, '/api/heartbeat')
+api.add_resource(Monitor, '/api/metric')
 api.add_resource(Disk, '/api/disk', '/api/disk/<disk_id>')
 api.add_resource(Job, '/api/job', '/api/job/<job_id>')
 api.add_resource(Mount, '/api/mount', '/api/mount/<backup_id>')
