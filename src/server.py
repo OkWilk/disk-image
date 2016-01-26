@@ -28,4 +28,4 @@ api.add_resource(Job, '/api/job', '/api/job/<job_id>')
 api.add_resource(Mount, '/api/mount', '/api/mount/<backup_id>')
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', threaded=True)
+    app.run(host='0.0.0.0', threaded=True)

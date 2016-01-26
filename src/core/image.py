@@ -222,7 +222,7 @@ class PartitionImage:
             partition_details['status'] = constants.STATUS_FINISHED
         else:
             partition_details['status'] = constants.STATUS_ERROR
-            raise Exception('The imaging did not finish successfully.')
+            raise Exception('The imaging did not finish successfully. (Code: ' + str(exit_code) + ')')
 
 
 class _PartcloneOutputParser(OutputParser):

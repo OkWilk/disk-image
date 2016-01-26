@@ -7,6 +7,7 @@ STATUS_ERROR = 'error'
 STATUS_FINISHED = 'finished'
 
 # File Constants
+BACKUP_DISK = 'sda'
 DEVICE_PATH = '/dev/'
 CONFIG_FILE = '/etc/diskimage/node/server.conf'
 BACKUP_PATH = '/backup/'
@@ -19,3 +20,4 @@ PARTITION_FILE_SUFFIX = '.img'
 
 # Interval Constants in seconds
 METRIC_INTERVAL = 5
+BUSY_WAIT_INTERVAL = 0.01

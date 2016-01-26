@@ -1,11 +1,13 @@
 from flask import request
 from flask_restful import Resource
+
+import constants
 from core.controller import MountController
 
 mounted = {}
 
-class Mount(Resource):
 
+class Mount(Resource):
 
     def get(self, backup_id=None):
         if backup_id:
@@ -39,9 +41,12 @@ class Mount(Resource):
         try:
             controller = MountController(backup_id)
             controller.mount()
-            mounted[backup_id] = {'controller': controller}
-            print("mounted:" + str(mounted))
-            return 'OK', 200
+            print(controller.get_status()['status'])
+            if controller.get_status()['status'] != constants.STATUS_ERROR:
+                mounted[backup_id] = {'controller': controller}
+                return 'OK', 200
+            else:
+                return controller.get_status()['error_msg'], 500
         except Exception as e:
             return 'Cannot mount backup, cause: ' + str(e), 400
 

@@ -18,6 +18,7 @@ from core.sqfs import SquashWrapper
 from services.config import ConfigHelper
 from services.database import DB, ItemExistsException
 
+#TODO: Refactor to add superclass for mount and process controller
 
 class ProcessController:
     __metaclass__ = ABCMeta
@@ -215,6 +216,9 @@ class MountController:
     def get_status(self):
         return self._status
 
+    def is_error_status(self):
+        return self._status['status'] == constants.STATUS_ERROR
+
     def _init_status(self):
         self._status = {
             'id': self.backupset.id,
@@ -228,13 +232,12 @@ class MountController:
     def mount(self):
         if self._can_mount():
             self._create_dir(self.mount_path)
-            try:
-                self._mount_partitions()
-                self._status['status'] = constants.STATUS_RUNNING
-            except Exception as e:
-                self._release_nodes()
-                self._set_error('Cannot mount resource, cause: ' + str(e))
-                self._delete_dir(self.mount_path)
+            self._status['status'] = constants.STATUS_PENDING
+            self._mount_partitions()
+            self._status['status'] = constants.STATUS_RUNNING
+        if not self._is_mounted_correctly():
+            self._release_nodes()
+            self._delete_dir(self.mount_path)
 
     def unmount(self):
         if self._can_unmount():
@@ -247,12 +250,26 @@ class MountController:
     def _mount_partitions(self):
         for partition in self.backupset.partitions:
             node = self.NODE_POOL.acquire()
-            image_path = self.backupset.backup_path + constants.PARTITION_FILE_PREFIX + partition.id + \
-                         constants.PARTITION_FILE_SUFFIX
-            image_mount_path = self.mount_path + constants.PARTITION_FILE_PREFIX + partition.id + '/'
+            image_path = self._get_image_path(partition)
+            image_mount_path = self._get_image_mount_path(partition)
             self._create_dir(image_mount_path)
             node.mount(image_path, partition.file_system, image_mount_path)
             self.nodes.append(node)
+
+    def _get_image_path(self, partition):
+        return self.backupset.backup_path + constants.PARTITION_FILE_PREFIX + partition.id + \
+                         constants.PARTITION_FILE_SUFFIX
+
+    def _get_image_mount_path(self, partition):
+        return self.mount_path + constants.PARTITION_FILE_PREFIX + partition.id + '/'
+
+    def _is_mounted_correctly(self):
+        error_detected = False
+        for node in self.nodes:
+            if node.error and not error_detected:
+                error_detected = True
+                self._set_error("Error detected duirng the mount operation on backup " + str(self.backupset.id))
+        return not error_detected
 
     def _create_dir(self, dir):
         try:

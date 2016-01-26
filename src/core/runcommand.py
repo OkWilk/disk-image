@@ -13,13 +13,15 @@ import subprocess
 
 class OutputParser:
     """The base class for parsing modules used with Execute class"""
-    def __init__(self):
+    def __init__(self, silent=True):
         self.output = None
+        self.silent = silent
 
     def parse(self, data):
         """Parses data received and saves it in output variable"""
         self.output = data
-
+        if not self.silent:
+            print(str(self.output))
 
 class OutputToFileConverter(OutputParser):
     """The special Output Parser extension that allows writing output directly
@@ -45,6 +47,10 @@ class Execute:
     """Command execution wrapper that provides support for both, line-buffering
     through tty emulation and blocking modes.
     """
+
+    PROCESS_KILLED = -9
+    PROCESS_NOT_STARTED = -1
+    PROCESS_RUNNING = None
 
     def __init__(self, command:list, output_parser:'OutputParser'=OutputParser(),
                  use_pty:bool=False, shell:bool=False, buffer_size:int=1024):
@@ -123,7 +129,7 @@ class Execute:
 
     def _run_without_pty(self):
         """Executes command and passes standard output to the output_parser."""
-        self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE,
+        self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         shell=self.shell)
         out, err = self.process.communicate()
         self.output_parser.parse(out.decode("utf-8"))

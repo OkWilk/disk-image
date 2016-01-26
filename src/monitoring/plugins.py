@@ -40,7 +40,7 @@ class CpuUtilisationPlugin(ThreadedMetricPlugin):
 
 class DiskIOUtilisationPlugin(ThreadedMetricPlugin):
     NAME = 'Disk_IO_Utilisation'
-    COMMAND = ['iostat', '-x', '-d', 'sda']
+    COMMAND = ['iostat', '-x', '-d', str(constants.BACKUP_DISK)]
 
     def _run(self):
         self._thread = Thread(target=self._collect_metric, daemon=True)
