@@ -31,7 +31,6 @@ class ProcessController:
         self.backupset = None
         self._thread = None
         self._imager = None
-        self._disk_layout = DiskLayout.with_config(self.disk, self.backup_dir, config)
         self._status = {
             'status': '',
             'path': '',
@@ -61,7 +60,8 @@ class ProcessController:
 
 class BackupController(ProcessController):
     def __init__(self, disk, job_id, config):
-        ProcessController.__init__(self, disk, job_id, config)
+        super(BackupController, self).__init__(disk, job_id, config)
+        self._disk_layout = DiskLayout.with_config(self.disk, self.backup_dir, config)
         if self.config['overwrite']:
             self._remove_previous_backup()
         if self._status['status'] != constants.STATUS_ERROR:
@@ -127,7 +127,7 @@ class BackupController(ProcessController):
         disk_details = DiskDetect.get_disk_details(self.disk)
         self.backupset = BackupSet(self.job_id)
         self.backupset.creation_date = datetime.today().strftime(constants.DATE_FORMAT)
-        self.backupset.disk_layout = self._disk_layout.detect_layout()
+        self.backupset.disk_layout = self._disk_layout.get_layout()
         self.backupset.disk_size = disk_details['size']
         self.backupset.compressed = self.config['compress']
         self._add_partitions_to_backupset(disk_details['partitions'])
@@ -151,6 +151,7 @@ class RestorationController(ProcessController):
     def __init__(self, disk, backup_id, config):
         ProcessController.__init__(self, disk, backup_id, config)
         self.backupset = self._load_backupset()
+        self._disk_layout = DiskLayout.with_config(self.disk, self.backup_dir, config, self.backupset.disk_layout)
         self._imager = PartitionImage.with_config(self.disk, self.backup_dir,
                                                   self.backupset, config)
 
@@ -181,7 +182,7 @@ class RestorationController(ProcessController):
             self._init_status()
             if self.backupset.compressed:
                 self._mount_sqfs()
-            self._disk_layout.restore_layout(self.backupset.disk_layout)
+            self._disk_layout.restore_layout()
             self._imager.restore()
             self._status['status'] = constants.STATUS_FINISHED
         except Exception as e:

@@ -4,3 +4,4 @@ notes
 *.pyc
 */__pycache__/*
 .idea/
+server.log

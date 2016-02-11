@@ -1,3 +1,5 @@
+import logging
+
 from flask import Flask
 from flask_restful import Api
 
@@ -6,6 +8,10 @@ from api.resources.heartbeat import Heartbeat
 from api.resources.job import Job
 from api.resources.monitor import Monitor
 from api.resources.mount import Mount
+
+logging .basicConfig(level=logging.DEBUG, format='%(asctime)s [%(name)s][%(levelname)s]: %(message)s', filename='server.log',
+                     filemode='w')
+log = logging.getLogger('werkzeug').setLevel(logging.WARNING)  # Suppress HTTP request logging
 
 app = Flask(__name__)
 api = Api(app)

@@ -29,13 +29,13 @@ class PartitionImage:
         'ext4': 'partclone.ext4',
         'hfsplus': 'partclone.hfsp',
         'hfs+': 'partclone.hfsp',
-        'hfs': 'partclone.hfsp',
+        'hfs': 'partclone.dd',  # There's no support for the legacy HFS in partclone
         'raw': 'partclone.dd',
     }
 
-    def __init__(self, disk:str, path:str, backupset:'BackupSet', overwrite:bool=False, rescue:bool=False,
-                 space_check:bool=True, fs_check:bool=True, crc_check:bool=True,
-                 force:bool=False, refresh_delay:int=5, compress:bool=False):
+    def __init__(self, disk: str, path: str, backupset: 'BackupSet', overwrite: bool = False, rescue: bool = False,
+                 space_check: bool = True, fs_check: bool = True, crc_check: bool = True,
+                 force: bool = False, refresh_delay: int = 5, compress: bool = False):
         self.disk = disk
         self.backupset = backupset
         self.path = path
@@ -55,7 +55,7 @@ class PartitionImage:
         self._init_status()
 
     @classmethod
-    def with_config(cls, disk:str, path:str, backupset:'BackupSet', config:dict):
+    def with_config(cls, disk: str, path: str, backupset: 'BackupSet', config: dict):
         try:
             return cls(disk, path, backupset, config['overwrite'], config['rescue'],
                        config['space_check'], config['fs_check'],
@@ -100,7 +100,8 @@ class PartitionImage:
                 raise ImageError('The device ' + self._current_device + ' is unavailable.')
         except Exception as e:
             self._get_partition_status(self._current_partition)['status'] = constants.STATUS_ERROR
-            raise Exception('Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
+            raise Exception(
+                    'Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
 
     def _init_status(self):
         """Initializes the status information with all partitions detected for
@@ -131,8 +132,8 @@ class PartitionImage:
     def _get_backup_runner(self):
         if self.config['compress']:
             command = self._command_with_compression(self._current_device,
-                                                    self._current_image_file,
-                                                    self._current_fs)
+                                                     self._current_image_file,
+                                                     self._current_fs)
             return Execute(' '.join(command), _PartcloneOutputParser(),
                            shell=True, use_pty=True)
         else:
@@ -142,10 +143,10 @@ class PartitionImage:
 
     def _get_restoration_runner(self):
         command = self._restore_command(self._current_image_file,
-                                       self._current_device, self._current_fs)
+                                        self._current_device, self._current_fs)
         return Execute(command, _PartcloneOutputParser(), use_pty=True)
 
-    def _backup_command(self, source:str, target:str, fs:str):
+    def _backup_command(self, source: str, target: str, fs: str):
         """Creates a backup command for specified partition
         source - the partition to be imaged eg. /dev/sdb1
         target - file for partition image eg. /tmp/part1.img
@@ -156,7 +157,7 @@ class PartitionImage:
         command.append('-c')  # create backup
         return command
 
-    def _command_with_compression(self, source:str, target:str, fs:str):
+    def _command_with_compression(self, source: str, target: str, fs: str):
         TEMP_DIR = '/dev/null'
         image_name = target[target.rindex('/'):]
         return ['mksquashfs', TEMP_DIR, target.replace('img', 'sqfs'),
@@ -164,7 +165,7 @@ class PartitionImage:
                 ' f 444 root root ' +
                 ' '.join(self._backup_command(source, '-', fs)) + '\'']
 
-    def _restore_command(self, source:str, target:str, fs:str):
+    def _restore_command(self, source: str, target: str, fs: str):
         """Creates a restore command for specified partition
         source - the file containing partition image eg. /tmp/part1.img
         target - the partition for the image to be applied to eg. /dev/sdb1
@@ -175,7 +176,7 @@ class PartitionImage:
         command.append('-r')  # restore backup
         return command
 
-    def _build_command(self, source:str, target:str, fs:str):
+    def _build_command(self, source: str, target: str, fs: str):
         """Builds the generic part of the partclone command."""
         command = list()
         command.append(self._select_command_by_fs(fs))
@@ -187,7 +188,7 @@ class PartitionImage:
             command.extend(['-o', target])
         return command
 
-    def _select_command_by_fs(self, fs:str):
+    def _select_command_by_fs(self, fs: str):
         """Selects appropriate partclone version for the filesystem.
         Unrecognised filesystems will be treated as raw images and supported
         with use of partclone.dd
@@ -231,21 +232,25 @@ class _PartcloneOutputParser(OutputParser):
     def __init__(self):
         self.output = None
         self._output_dict = {}
+        self._logger = logging.getLogger(__name__)
 
     def parse(self, data):
         """Processes data from the command output and saves the result as output."""
-        raw_output = data.replace("\x1b[A","").lower()
+        raw_output = data.replace("\x1b[A", "").lower()
+        str_out = str(raw_output).strip()
+        if 'remaining:' not in str_out and 'complete:' not in str_out:
+            self._logger.debug(str(raw_output))
         self._check_for_errors(raw_output)
         raw_output = raw_output.split(',')
         for item in raw_output:
-                if ':' in item:
-                    key, value = item.lower().split(':',1)
-                    key = key.strip()
-                    value = value.strip()
-                    if key in self._valid_keys and 'completed' in key:
-                        self._output_dict[key] = value[0:-1]
-                    elif key in self._valid_keys:
-                        self._output_dict[key] = value
+            if ':' in item:
+                key, value = item.lower().split(':', 1)
+                key = key.strip()
+                value = value.strip()
+                if key in self._valid_keys and 'completed' in key:
+                    self._output_dict[key] = value[0:-1]
+                elif key in self._valid_keys:
+                    self._output_dict[key] = value
         if self._output_dict:
             self.output = self._output_dict
 
