@@ -18,7 +18,7 @@ class ImageTest(unittest.TestCase):
         'partition_table': '/tmp/sdxx/ptable.bak',
         'disk_layout': 'MBR'
     }
-    BACKUPSET = BackupSet.from_json(BACKUPSET_MOCK_VALUES)
+    BACKUPSET = BackupSet._from_json(BACKUPSET_MOCK_VALUES)
 
     def setUp(self):
         self.clone = image.PartitionImage('sdxx', '/tmp/', self.BACKUPSET)
@@ -203,7 +203,7 @@ class PartcloneOutputParserTest(unittest.TestCase):
     @patch('src.core.image.logging')
     def test_check_for_errors(self, log_mock):
         string = 'open target fail /tmp/part1.img: file exists (17)'
-        with self.assertRaises(image.ImageError):
+        with self.assertRaises(image.ImageException):
             self.parser._check_for_errors(string)
         self.assertEqual(1, log_mock.error.call_count)
 
@@ -224,7 +224,7 @@ class PartcloneOutputParserTest(unittest.TestCase):
 
     @patch('src.core.image.logging')
     def test_parse_checks_for_errors(self, log_mock):
-        with self.assertRaises(image.ImageError):
+        with self.assertRaises(image.ImageException):
             self.parser.parse('open target fail /tmp/part1.img: file exists (17)')
 
     def _parse_and_assert(self, string, elapsed, remaining, completed):

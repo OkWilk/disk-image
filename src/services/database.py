@@ -1,6 +1,9 @@
-from .mdbconnector import MongoConnector
-from .config import ConfigHelper
 from threading import RLock
+
+from pymongo import ASCENDING
+
+from .config import ConfigHelper
+from .mdbconnector import MongoConnector, to_list
 
 
 class Database:  # TODO: mark as abstract class
@@ -8,10 +11,7 @@ class Database:  # TODO: mark as abstract class
         self._lock = RLock()
         self.config = config
 
-    def insert_backup(self, backup_id, data):
-        pass
-
-    def update_backup(self, backup_id, data):
+    def upsert_backup(self, backup_id, data):
         pass
 
     def get_backup(self, backup_id):
@@ -20,20 +20,15 @@ class Database:  # TODO: mark as abstract class
     def remove_backup(self, backup_id):
         pass
 
+    def get_backups_for_purging(self):
+        pass
 
 class MongoDB(Database):
 
-    def insert_backup(self, backup_id, data):
+    def upsert_backup(self, backup_id, data):
         with self._lock:
             with MongoConnector(self.config) as db:
-                if db.backup.find_one({'id': backup_id}):
-                    raise ItemExistsException("A backup with id: '" + backup_id + "', already exists in the database.")
-                db.backup.insert(data)
-
-    def update_backup(self, backup_id, data):
-        with self._lock:
-            with MongoConnector(self.config) as db:
-                result = db.backup.update({'id': backup_id}, {'$set': data}, True)
+                db.backup.update_one({"id": backup_id}, {'$set': data}, True)
 
     def get_backup(self, backup_id):
         with self._lock:
@@ -45,9 +40,10 @@ class MongoDB(Database):
             with MongoConnector(self.config) as db:
                 db.backup.remove({'id': backup_id})
 
-
-class ItemExistsException(Exception):
-    pass
+    def get_backups_for_purging(self):
+        with self._lock:
+            with MongoConnector(self.config) as db:
+                return to_list(db.backup.find({'deleted': True}).sort('creation_date', ASCENDING))
 
 
 DB = MongoDB(ConfigHelper.config['Database'])

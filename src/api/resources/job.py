@@ -1,6 +1,7 @@
 from flask_restful import Resource, abort, reqparse
 from core.controller import BackupController, RestorationController
 import constants
+from lib.exceptions import DetectionException
 
 BACKUP_OPERATION = 'Backup'
 RESTORATION_OPERATION = 'Restoration'
@@ -50,10 +51,13 @@ class Job(Resource):
         args = self._parser.parse_args(strict=True)
         config = self._build_config_from_request_args(args)
         if args['job_id'] and args['disk'] and args['operation']:
-            controller = self._get_controller(args['operation'], args['disk'], args['job_id'], config)
-            controller.run()
-            _jobs[args['job_id']] = {'disk': args['disk'], 'controller': controller}
-            return "OK", 200
+            try:
+                controller = self._get_controller(args['operation'], args['disk'], args['job_id'], config)
+                controller.run()
+                _jobs[args['job_id']] = {'disk': args['disk'], 'controller': controller}
+                return "OK", 200
+            except DetectionException as e:
+                return str(e), 400
         else:
             abort(400, message="Error: Invalid input detected.")
 

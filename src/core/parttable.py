@@ -6,6 +6,7 @@ import constants
 from os import path
 from abc import ABCMeta, abstractmethod
 from .runcommand import Execute, OutputToFileConverter
+from lib.exceptions import DetectionException
 
 
 class DiskLayout:
@@ -42,7 +43,7 @@ class DiskLayout:
 
 class LayoutManagerFactory:
     def __init__(self):
-        pass
+        self._logger = logging.getLogger(__name__)
 
     def get_layout_manager(self, disk, target_dir, layout, overwrite):
         if not layout:
@@ -55,9 +56,13 @@ class LayoutManagerFactory:
             raise ValueError("Unsupported or invalid disk layout requested.")
 
     def _detect_layout(self, disk):
-        command = 'parted /dev/' + disk + ' p | grep "Partition Table"'
+        command = 'parted /dev/' + disk + ' p | grep "Partition Table\|Error"'
         parted = Execute(command, shell=True)
         parted.run()
+        if 'Error' in parted.output():
+            self._logger.warning('Could not detect partition layout for the device /dev/' + disk +
+                                 '. Cause: ' + parted.output())
+            raise DetectionException('Cannot detect partition layout for the ' + disk + '.')
         key, value = parted.output().split(':')
         if 'msdos' in value:
             return 'MBR'

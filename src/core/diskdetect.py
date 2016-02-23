@@ -94,6 +94,7 @@ class _DiskDetect:
     def __init__(self):
         self._runner = Execute(self._COMMAND, _LsblkOutputParser())
         self._lock = Lock()
+        self._output = ''
 
     def get_disk_list(self):
         """Detects disks recognised by the operating system and returns them along
@@ -108,16 +109,14 @@ class _DiskDetect:
         raise ValueError("Disk " + disk_id + " was not detected by the system.")
 
     def _detect_disks(self):
-        self._lock.acquire()
-        try:
-            self._runner.run()
-            output = self._runner.output()
-        except Exception as e:
-            logging.error("Disk detection failed, e: " + str(e))
-            raise e
-        finally:
-            self._lock.release()
-        return output
+        with self._lock:
+            try:
+                self._runner.run()
+                self._output = self._runner.output()
+            except Exception as e:
+                logging.error("Disk detection failed, e: " + str(e))
+                raise e
+            return self._output
 
 
 # Export as singleton

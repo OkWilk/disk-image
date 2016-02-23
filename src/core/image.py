@@ -2,10 +2,13 @@
 Date: 05/11/2015
 """
 import logging
-import constants
 from os import path
-from .runcommand import OutputParser, Execute
 
+import constants
+from lib.exceptions import ImageException, DiskSpaceException
+from .backupset import BackupSet
+from .runcommand import OutputParser, Execute
+from services.utils import BackupRemover
 
 class PartitionImage:
     """A wrapper for the Open Source partition imaging tool partclone
@@ -52,6 +55,7 @@ class PartitionImage:
         self._status = []
         self._current_partition = ""
         self._runner = None
+        self._logger = logging.getLogger(__name__)
         self._init_status()
 
     @classmethod
@@ -62,7 +66,7 @@ class PartitionImage:
                        config['crc_check'], config['force'],
                        config['refresh_delay'], config['compress'])
         except BaseException as e:
-            logging.error('Cannot build imager with config ' + str(config) + ', reason: ' + str(e))
+            logging.getLogger(__name__).error('Cannot build imager with config ' + str(config) + ', reason: ' + str(e))
             raise e
 
     def get_status(self):
@@ -87,7 +91,8 @@ class PartitionImage:
     def _prepare_partition_info(self, partition):
         self._current_partition = self.disk + partition.id
         self._current_device = self.DEVICE_PATH + self._current_partition
-        self._current_image_file = self.path + constants.PARTITION_FILE_PREFIX + partition.id + constants.PARTITION_FILE_SUFFIX
+        self._current_image_file = self.path + constants.PARTITION_FILE_PREFIX + partition.id + \
+                                   constants.PARTITION_FILE_SUFFIX
         self._current_fs = partition.file_system
 
     def _run_process(self):
@@ -97,7 +102,7 @@ class PartitionImage:
                 self._runner.run()
                 self._handle_exit_code(self._runner.poll())
             else:
-                raise ImageError('The device ' + self._current_device + ' is unavailable.')
+                raise ImageException('The device ' + self._current_device + ' is unavailable.')
         except Exception as e:
             self._get_partition_status(self._current_partition)['status'] = constants.STATUS_ERROR
             raise Exception(
@@ -223,16 +228,27 @@ class PartitionImage:
             partition_details['status'] = constants.STATUS_FINISHED
         else:
             partition_details['status'] = constants.STATUS_ERROR
-            raise Exception('The imaging did not finish successfully. (Code: ' + str(exit_code) + ')')
+            raise ImageException('The imaging did not finish successfully. (Code: ' + str(exit_code) + ')')
 
 
 class _PartcloneOutputParser(OutputParser):
-    _valid_keys = ['elapsed', 'remaining', 'completed']
+    _VALID_KEYS = ['elapsed', 'remaining', 'completed']
+    ERROR_MAPPING = {
+        "destination doesn't have enough free space": 'Not enough free space on the destination disk.',
+        "file exists (17)": 'Image file already exists, if you want to replace backup, make sure to check the overwrite option.',
+        "*** buffer overflow detected ***:": 'Imaging software caused buffer overflow. Check if source disk is still present in the system.',
+        "failed to read file": 'Selected backup cannot be read.',
+        "use the --rescue option": 'I/O errors detected, if you wish to continue, restart backup with the rescue option selected.',
+        "or fix it by fsck": 'A file system is marked as dirty on the source disk. Fix the file system and try again or disable the filesystem check option.',
+        "use option -c to disable size checking(dangerous)": 'Target disk is smaller than the original. Use larger disk or disable space checking.',
+        "error": 'An unknown error was caused by imaging software.'
+    }
 
     def __init__(self):
         self.output = None
         self._output_dict = {}
         self._logger = logging.getLogger(__name__)
+        self._skip = True
 
     def parse(self, data):
         """Processes data from the command output and saves the result as output."""
@@ -241,34 +257,32 @@ class _PartcloneOutputParser(OutputParser):
         if 'remaining:' not in str_out and 'complete:' not in str_out:
             self._logger.debug(str(raw_output))
         self._check_for_errors(raw_output)
-        raw_output = raw_output.split(',')
-        for item in raw_output:
-            if ':' in item:
-                key, value = item.lower().split(':', 1)
-                key = key.strip()
-                value = value.strip()
-                if key in self._valid_keys and 'completed' in key:
-                    self._output_dict[key] = value[0:-1]
-                elif key in self._valid_keys:
-                    self._output_dict[key] = value
-        if self._output_dict:
-            self.output = self._output_dict
+        if not self._skip:
+            raw_output = raw_output.split(',')
+            for item in raw_output:
+                if ':' in item:
+                    key, value = item.lower().split(':', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    if key in self._VALID_KEYS and 'completed' in key:
+                        self._output_dict[key] = value[0:-1]
+                    elif key in self._VALID_KEYS:
+                        self._output_dict[key] = value
+            if self._output_dict:
+                self.output = self._output_dict
+        else:
+            if 'file system:' in str_out:
+                self._skip = False
 
     def _check_for_errors(self, string):
         """Tests the output string for error messages and processes them."""
         string = string.lower()
-        self._find_and_raise('file exists (17)', string)
-        self._find_and_raise('*** buffer overflow detected ***:', string)
-        self._find_and_raise('failed to read file', string)
-        self._find_and_raise('use the --rescue option', string)
-        self._find_and_raise('error', string)
+        if "destination doesn't have enough free space" in string:
+            BackupRemover.handle_space_error(string)
+        for error in self.ERROR_MAPPING:
+            self._find_and_raise(string, error, message=self.ERROR_MAPPING[error])
 
-    def _find_and_raise(self, target, string):
+    def _find_and_raise(self, string, target, message):
         if target in string:
-            logging.error(string)
-            raise ImageError(string)
-
-
-class ImageError(Exception):
-    """Raised in case of backup and restoration issues."""
-    pass
+            self._logger.error(string)
+            raise ImageException(message)
