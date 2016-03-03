@@ -23,6 +23,7 @@ class MongoConnector:
         Return the database cursor to the context manager.
         """
         self.client = pymongo.MongoClient(self.config['Host'])
+        self.client[self.config['Database']].authenticate(self.config['User'], self.config['Password'])
         return self.client[self.config['Database']]
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -37,3 +38,4 @@ def to_list(data):
     for item in data:
         items.append(item)
     return items
+

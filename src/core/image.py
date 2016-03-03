@@ -2,7 +2,7 @@
 Date: 05/11/2015
 """
 import logging
-from os import path
+from os import path, remove
 
 import constants
 from lib.exceptions import ImageException, DiskSpaceException
@@ -97,16 +97,25 @@ class PartitionImage:
 
     def _run_process(self):
         self._get_partition_status(self._current_partition)['status'] = constants.STATUS_RUNNING
-        try:
-            if path.exists(self._current_device):
-                self._runner.run()
-                self._handle_exit_code(self._runner.poll())
-            else:
-                raise ImageException('The device ' + self._current_device + ' is unavailable.')
-        except Exception as e:
-            self._get_partition_status(self._current_partition)['status'] = constants.STATUS_ERROR
-            raise Exception(
-                    'Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
+        retry = True
+        while retry:
+            retry = False
+            try:
+                if path.exists(self._current_device):
+                    self._runner.run()
+                    self._handle_exit_code(self._runner.poll())
+                else:
+                    raise ImageException('The device ' + self._current_device + ' is unavailable.')
+            except DiskSpaceException as e:
+                BackupRemover.handle_space_error(e)
+                print(str(self._current_image_file))
+                if path.exists(self._current_image_file):
+                    remove(self._current_image_file)
+                retry = True
+            except Exception as e:
+                self._get_partition_status(self._current_partition)['status'] = constants.STATUS_ERROR
+                raise Exception(
+                        'Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
 
     def _init_status(self):
         """Initializes the status information with all partitions detected for
@@ -228,7 +237,7 @@ class PartitionImage:
             partition_details['status'] = constants.STATUS_FINISHED
         else:
             partition_details['status'] = constants.STATUS_ERROR
-            raise ImageException('The imaging did not finish successfully. (Code: ' + str(exit_code) + ')')
+            raise Exception('The imaging did not finish successfully. (Code: ' + str(exit_code) + ')')
 
 
 class _PartcloneOutputParser(OutputParser):
@@ -278,7 +287,7 @@ class _PartcloneOutputParser(OutputParser):
         """Tests the output string for error messages and processes them."""
         string = string.lower()
         if "destination doesn't have enough free space" in string:
-            BackupRemover.handle_space_error(string)
+            raise DiskSpaceException(string)
         for error in self.ERROR_MAPPING:
             self._find_and_raise(string, error, message=self.ERROR_MAPPING[error])
 

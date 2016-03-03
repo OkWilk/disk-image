@@ -3,6 +3,8 @@ from services.config import ConfigHelper
 from services.database import DB
 from datetime import datetime
 
+from lib.exceptions import IllegalOperationException
+
 class BackupSet:
 
     def __init__(self, backup_id):
@@ -16,8 +18,9 @@ class BackupSet:
         self.compressed = False
         self.backup_size = 0
         self.disk_size = 0
-        self.deletion_date = ""
+        self.deletion_date = ''
         self.creation_date = datetime.today()
+        self.purge_date = ''
         self.partitions = []
 
     @classmethod
@@ -42,9 +45,18 @@ class BackupSet:
         backupset.disk_size = json.get('disk_size')
         backupset.deletion_date = json.get('deletion_date')
         backupset.creation_date = json.get('creation_date')
+        backupset.purge_date = json.get('purge_date')
         for partition in json.get('partitions'):
             backupset.partitions.append(Partition.from_json(partition))
         return backupset
+
+    def mark_as_purged(self):
+        if self.deleted:
+            self.purged = True
+            self.purge_date = datetime.today()
+            self.save()
+        else:
+            raise IllegalOperationException('The backup to be purged, was not marked for deletion yet.')
 
     def save(self):
         DB.upsert_backup(self.id, self.to_json())
@@ -68,6 +80,7 @@ class BackupSet:
             'disk_size': self.disk_size,
             'deletion_date': self.deletion_date,
             'creation_date': self.creation_date,
+            'purge_date': self.purge_date,
             'partitions': [],
         }
         for partition in self.partitions:

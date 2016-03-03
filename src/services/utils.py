@@ -3,24 +3,29 @@ from os import mkdir
 from shutil import rmtree
 from threading import Lock
 
-from lib.exceptions import BackupOperationException
+from core.backupset import BackupSet
+from lib.exceptions import BackupOperationException, IllegalOperationException, DiskSpaceException
 from .config import ConfigHelper
 from .database import DB
 
 
 def delete_backup(backupset):
-    #TODO: add purge flag to check if the backup is actually deleted.
     if backupset.deleted:
-        DB.remove_backup(backupset.id)
-    elif backupset.node == ConfigHelper.config['Node']['Name']:
-        try:
-            rmtree(backupset.backup_path)
-            DB.remove_backup(backupset.id)
-        except Exception as e:
-            raise BackupOperationException('Cannot remove backup, cause: ' + str(e))
+        if backupset.node == ConfigHelper.config['Node']['Name']:  # FIXME: This code will stop other nodes from deleting the backup files, it needs to be changed.
+            _remove_backup_files(backupset)
+        else:
+            raise IllegalOperationException("The requested backup resides on a different node. " +
+                                            "Please use node: " + backupset.node + " for this backup overwrite.")
     else:
-        raise BackupOperationException("The requested backup resides on a different node. " +
-                                "Please use node: " + backupset.node + " for this backup overwrite.")
+        raise IllegalOperationException("A backup must be marked as ready for deletion before trying to overwrite it.")
+
+
+def _remove_backup_files(backupset):
+    try:
+        rmtree(backupset.backup_path)
+        backupset.mark_as_purged()
+    except Exception as e:
+        raise BackupOperationException('Cannot remove backup, cause: ' + str(e))
 
 
 def create_dir(dir):
@@ -35,8 +40,6 @@ def delete_dir(dir):
         rmtree(dir)
     except:
         pass  # TODO: do something better here...
-
-
 
 
 class _BackupRemover:
@@ -78,14 +81,21 @@ class _BackupRemover:
         with self._lock:
             purge_list = []
             remaining_space_required = space_required
-            backups = DB.get_backups_for_purging()
-            for backup in backups:
+            for backup in DB.get_backups_for_purging():
                 if remaining_space_required > 0:
                     print(str(backup['backup_size']))
                     remaining_space_required -= int(backup['backup_size'])
                     purge_list.append(backup)
+            if remaining_space_required > 0:
+                raise Exception('Unable to free up required disk space for backup. Remaining disk space required would be: '
+                                         + str(remaining_space_required))
             for backup in purge_list:
                 self._logger.debug(str(backup['id']) + ': ' + str(backup['backup_size']))
+                self._purge_backup(backup)
             self._logger.debug('Remaining_space_required: ' + str(remaining_space_required))
+
+    def _purge_backup(self, backup):
+        _remove_backup_files(BackupSet.load(backup['id']))
+
 
 BackupRemover = _BackupRemover()

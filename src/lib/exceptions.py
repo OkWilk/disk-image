@@ -1,5 +1,9 @@
 
-class DiskImageException(BaseException):
+class DiskImageException(Exception):
+    pass
+
+
+class IllegalOperationException(DiskImageException):
     pass
 
 

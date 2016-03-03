@@ -15,7 +15,7 @@ from core.image import PartitionImage
 from core.nbdpool import NBDPool
 from core.parttable import DiskLayout
 from core.sqfs import SquashWrapper
-from lib.exceptions import DiskImageException
+from lib.exceptions import DiskImageException, ImageException
 from services.config import ConfigHelper
 from services.utils import delete_backup, delete_dir, create_dir
 
