@@ -6,7 +6,7 @@ from os import path, remove
 
 import constants
 from lib.exceptions import ImageException, DiskSpaceException
-from .backupset import BackupSet
+from .backupset import Backupset
 from .runcommand import OutputParser, Execute
 from services.utils import BackupRemover
 
@@ -36,7 +36,7 @@ class PartitionImage:
         'raw': 'partclone.dd',
     }
 
-    def __init__(self, disk: str, path: str, backupset: 'BackupSet', overwrite: bool = False, rescue: bool = False,
+    def __init__(self, disk: str, path: str, backupset: 'Backupset', overwrite: bool = False, rescue: bool = False,
                  space_check: bool = True, fs_check: bool = True, crc_check: bool = True,
                  force: bool = False, refresh_delay: int = 5, compress: bool = False):
         self.disk = disk
@@ -59,7 +59,7 @@ class PartitionImage:
         self._init_status()
 
     @classmethod
-    def with_config(cls, disk: str, path: str, backupset: 'BackupSet', config: dict):
+    def with_config(cls, disk: str, path: str, backupset: 'Backupset', config: dict):
         try:
             return cls(disk, path, backupset, config['overwrite'], config['rescue'],
                        config['space_check'], config['fs_check'],

@@ -1,4 +1,5 @@
 from threading import RLock
+from abc import ABCMeta, abstractclassmethod
 
 from pymongo import ASCENDING
 
@@ -7,24 +8,28 @@ from .mdbconnector import MongoConnector, to_list
 
 
 class Database:  # TODO: mark as abstract class
+    __metaclass__ = ABCMeta
+
     def __init__(self, config):
         self._lock = RLock()
         self.config = config
 
+    @abstractclassmethod
     def upsert_backup(self, backup_id, data):
         pass
 
+    @abstractclassmethod
     def get_backup(self, backup_id):
         pass
 
+    @abstractclassmethod
     def remove_backup(self, backup_id):
         pass
 
-    def purge_backup(self, backup_id):
-        pass
-
+    @abstractclassmethod
     def get_backups_for_purging(self):
         pass
+
 
 class MongoDB(Database):
 
@@ -42,11 +47,6 @@ class MongoDB(Database):
         with self._lock:
             with MongoConnector(self.config) as db:
                 db.backup.remove({'id': backup_id})
-
-    def purge_backup(self, backup_id):
-        with self._lock:
-            with MongoConnector(self.config) as db:
-                db.backup.update_one({'id': backup_id}, {'$set': {'purged': True}})
 
     def get_backups_for_purging(self):
         with self._lock:

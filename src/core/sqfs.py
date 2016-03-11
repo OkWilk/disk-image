@@ -4,7 +4,7 @@ from shutil import rmtree
 from .runcommand import Execute
 
 
-class SquashWrapper:
+class SquashfsWrapper:
     # TODO: add error handling
     SQFS_MNT_DIR = 'sqfs_mnt'
 

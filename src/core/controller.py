@@ -9,12 +9,12 @@ from os import path, makedirs, listdir
 from threading import Thread
 
 import constants as constants
-from core.backupset import BackupSet
+from core.backupset import Backupset
 from core.diskdetect import DiskDetect
 from core.image import PartitionImage
 from core.nbdpool import NBDPool
 from core.parttable import DiskLayout
-from core.sqfs import SquashWrapper
+from core.sqfs import SquashfsWrapper
 from lib.exceptions import DiskImageException, ImageException
 from services.config import ConfigHelper
 from services.utils import delete_backup, delete_dir, create_dir
@@ -55,6 +55,7 @@ class ProcessController(BasicController):
         self.backup_dir = constants.BACKUP_PATH + str(backup_id) + '/'
         self._thread = None
         self._imager = None
+        self._disk_layout = None
         self._status.update({
             'status': '',
             'path': '',
@@ -94,7 +95,7 @@ class BackupController(ProcessController):
 
     def _remove_previous_backup(self):
         try:
-            backupset = BackupSet.load(self.backup_id)
+            backupset = Backupset.load(self.backup_id)
             delete_backup(backupset)
         except DiskImageException as e:
             self._set_error(str(e))
@@ -131,7 +132,7 @@ class BackupController(ProcessController):
 
     def _create_backupset(self):
         disk_details = DiskDetect.get_disk_details(self.disk)
-        self.backupset = BackupSet(self.backup_id)
+        self.backupset = Backupset(self.backup_id)
         self.backupset.disk_layout = self._disk_layout.get_layout()
         self.backupset.disk_size = disk_details['size']
         self.backupset.compressed = self.config['compress']
@@ -154,7 +155,7 @@ class RestorationController(ProcessController):
                                                   self.backupset, config)
 
     def _load_backupset(self):
-        self.backupset = BackupSet.load(self.backup_id)
+        self.backupset = Backupset.load(self.backup_id)
         if self.backupset.node == ConfigHelper.config['Node']['Name']:
             return self.backupset
         else:
@@ -189,7 +190,7 @@ class RestorationController(ProcessController):
                 self._umount_sqfs()
 
     def _mount_sqfs(self):
-        self.squash_wrapper = SquashWrapper(self.backupset)
+        self.squash_wrapper = SquashfsWrapper(self.backupset)
         self.squash_wrapper.mount()
 
     def _umount_sqfs(self):
@@ -204,7 +205,7 @@ class MountController(BasicController):
     def __init__(self, backup_id):
         super(MountController, self).__init__(backup_id)
         self.nodes = []
-        self.backupset = BackupSet.load(backup_id)
+        self.backupset = Backupset.load(backup_id)
         self.mount_path = constants.MOUNT_PATH + self.backupset.id + '/'
 
     def mount(self):

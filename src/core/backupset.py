@@ -5,7 +5,7 @@ from datetime import datetime
 
 from lib.exceptions import IllegalOperationException
 
-class BackupSet:
+class Backupset:
 
     def __init__(self, backup_id):
         self.id = backup_id
@@ -59,14 +59,14 @@ class BackupSet:
             raise IllegalOperationException('The backup to be purged, was not marked for deletion yet.')
 
     def save(self):
-        DB.upsert_backup(self.id, self.to_json())
+        DB.upsert_backup(self.id, self.to_dict())
 
     def add_partitions(self, partitions):
         for partition in partitions:
             partition_number = partition['name'][-1]
             self.partitions.append(Partition(partition_number, partition['fs'], partition['size']))
 
-    def to_json(self):
+    def to_dict(self):
         json = {
             'id': self.id,
             'node': self.node,
@@ -84,7 +84,7 @@ class BackupSet:
             'partitions': [],
         }
         for partition in self.partitions:
-            json['partitions'].append(partition.to_json())
+            json['partitions'].append(partition.to_dict())
         return json
 
 
@@ -98,7 +98,7 @@ class Partition:
     def from_json(cls, json):
         return cls(json.get('partition'), json.get('fs'), json.get('size'))
 
-    def to_json(self):
+    def to_dict(self):
         return {
             'partition': self.id,
             'fs': self.file_system,

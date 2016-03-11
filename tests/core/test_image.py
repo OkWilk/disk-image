@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import Mock, patch
-from src.core.backupset import BackupSet
+from src.core.backupset import Backupset
 import src.core.image as image
 import src.constants as constants
 
@@ -18,7 +18,7 @@ class ImageTest(unittest.TestCase):
         'partition_table': '/tmp/sdxx/ptable.bak',
         'disk_layout': 'MBR'
     }
-    BACKUPSET = BackupSet._from_json(BACKUPSET_MOCK_VALUES)
+    BACKUPSET = Backupset._from_json(BACKUPSET_MOCK_VALUES)
 
     def setUp(self):
         self.clone = image.PartitionImage('sdxx', '/tmp/', self.BACKUPSET)

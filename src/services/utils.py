@@ -3,7 +3,7 @@ from os import mkdir
 from shutil import rmtree
 from threading import Lock
 
-from core.backupset import BackupSet
+from core.backupset import Backupset
 from lib.exceptions import BackupOperationException, IllegalOperationException, DiskSpaceException
 from .config import ConfigHelper
 from .database import DB
@@ -95,7 +95,7 @@ class _BackupRemover:
             self._logger.debug('Remaining_space_required: ' + str(remaining_space_required))
 
     def _purge_backup(self, backup):
-        _remove_backup_files(BackupSet.load(backup['id']))
+        _remove_backup_files(Backupset.load(backup['id']))
 
 
 BackupRemover = _BackupRemover()

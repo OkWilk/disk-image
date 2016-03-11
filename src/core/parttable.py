@@ -2,11 +2,12 @@
 Date: 06/11/2015
 """
 import logging
-import constants
-from os import path
 from abc import ABCMeta, abstractmethod
-from .runcommand import Execute, OutputToFileConverter
+from os import path
+
+import constants
 from lib.exceptions import DetectionException
+from .runcommand import Execute, OutputToFileConverter
 
 
 class DiskLayout:
