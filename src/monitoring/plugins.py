@@ -1,7 +1,9 @@
-import psutil
-import constants
 from threading import Thread
+
+import psutil
+
 from core.runcommand import Execute, OutputParser
+from services.config import ConfigHelper
 from .sysmon import MetricPlugin, ThreadedMetricPlugin
 
 
@@ -10,7 +12,7 @@ class DiskSpacePlugin(MetricPlugin):
     INDEX = 3
 
     def _collect_metric(self):
-        return psutil.disk_usage(constants.BACKUP_PATH)[self.INDEX]
+        return psutil.disk_usage(ConfigHelper.config['Node']['Backup Path'])[self.INDEX]
 
 
 class RAMUtilisationPlugin(MetricPlugin):
@@ -40,7 +42,7 @@ class CpuUtilisationPlugin(ThreadedMetricPlugin):
 
 class DiskIOUtilisationPlugin(ThreadedMetricPlugin):
     NAME = 'Disk_IO_Utilisation'
-    COMMAND = ['iostat', '-x', '-d', str(constants.BACKUP_DISK)]
+    COMMAND = ['iostat', '-x', '-d', str(ConfigHelper.config['Node']['Backup Disk'])]
 
     def _run(self):
         self._thread = Thread(target=self._collect_metric, daemon=True)

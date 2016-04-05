@@ -8,6 +8,8 @@ from logging import getLogger
 from os import path, makedirs, listdir
 from threading import Thread
 
+from jinja2.nodes import Concat
+
 import constants as constants
 from core.backupset import Backupset
 from core.diskdetect import DiskDetect
@@ -52,7 +54,7 @@ class ProcessController(BasicController):
         super(ProcessController, self).__init__(backup_id)
         self.disk = disk
         self.config = config
-        self.backup_dir = constants.BACKUP_PATH + str(backup_id) + '/'
+        self.backup_dir = ConfigHelper.config['Node']['Backup Path'] + str(backup_id) + '/'
         self._thread = None
         self._imager = None
         self._disk_layout = None
@@ -206,7 +208,7 @@ class MountController(BasicController):
         super(MountController, self).__init__(backup_id)
         self.nodes = []
         self.backupset = Backupset.load(backup_id)
-        self.mount_path = constants.MOUNT_PATH + self.backupset.id + '/'
+        self.mount_path = ConfigHelper.config['Node']['Mount Path'] + self.backupset.id + '/'
 
     def mount(self):
         create_dir(self.mount_path)
