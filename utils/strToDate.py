@@ -27,8 +27,8 @@ def addPurge(host, port, database, collection):
     db = client[database]
     col = db[collection]
     for obj in col.find():
-        col.update({'_id':obj['_id']},{'$set':{'purged' : False}})
+        col.update({'_id':obj['_id']},{'$set':{'purged' : False, 'purge_date':''}})
 #
-# fixTime('localhost', 27017, 'DiskImage', 'backup', 'creation_date', '%d/%m/%Y %H:%M:%S')
-# fixTime('localhost', 27017, 'DiskImage', 'backup', 'deletion_date', '%d/%m/%Y %H:%M:%S')
+fixTime('localhost', 27017, 'DiskImage', 'backup', 'creation_date', '%d/%m/%Y %H:%M:%S')
+fixTime('localhost', 27017, 'DiskImage', 'backup', 'deletion_date', '%d/%m/%Y %H:%M:%S')
 addPurge('localhost', 27017, 'DiskImage', 'backup')

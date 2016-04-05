@@ -114,7 +114,7 @@ class _DiskDetect:
                 self._runner.run()
                 self._output = self._runner.output()
             except Exception as e:
-                logging.error("Disk detection failed, e: " + str(e))
+                logging.error("Disk detection failed, cause: " + str(e))
                 raise e
             return self._output
 

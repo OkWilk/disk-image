@@ -20,7 +20,6 @@ class Job(Resource):
     _parser.add_argument('fs_check', type=bool, location='json')
     _parser.add_argument('crc_check', type=bool, location='json')
     _parser.add_argument('force', type=bool, location='json')
-    _parser.add_argument('refresh_delay', type=int, location='json')
     _parser.add_argument('compress', type=bool, location='json')
 
     def get(self, job_id=None):
@@ -45,7 +44,7 @@ class Job(Resource):
             payload.update(_jobs[job_id]['controller'].get_status())
             return payload
         else:
-            return "The requested resource is unavailable.", 404
+            return "The requested job does not exist.", 404
 
     def post(self):
         args = self._parser.parse_args(strict=True)
@@ -81,8 +80,6 @@ class Job(Resource):
             config['crc_check'] = args['crc_check']
         if 'force' in args:
             config['force'] = args['force']
-        if 'refresh_delay' in args:
-            config['refresh_delay'] = args['refresh_delay']
         if 'compress' in args:
             config['compress'] = args['compress']
         return config
@@ -102,15 +99,15 @@ class Job(Resource):
 
     def delete(self, job_id):
         if job_id in _jobs:
-            return self._finish_backup(job_id)
+            return self._finish_job(job_id)
         else:
             return "Error: Invalid resource requested.", 404
 
-    def _finish_backup(self, job_id):
+    def _finish_job(self, job_id):
         status = self.get(job_id)['status']
         if status == constants.STATUS_FINISHED or status == constants.STATUS_ERROR:
             _jobs.pop(job_id)
             return 'OK', 200
         else:  # TODO: allow terminating jobs and deleting them.
-            return "Cannot abort job at this moment.", 400
+            return 'Cannot abort job at this moment.', 400
 
