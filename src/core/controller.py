@@ -22,8 +22,6 @@ from services.config import ConfigHelper
 from services.utils import delete_backup, delete_dir, create_dir
 
 
-#TODO: Refactor to add superclass for mount and process controller
-
 class BasicController:
     __metaclass__ = ABCMeta
 
@@ -72,6 +70,11 @@ class ProcessController(BasicController):
         self._update_status()
         return self._status
 
+    def kill(self):
+        if self._imager:
+            self._imager.kill()
+        self._set_error("Job cancelled by the user.")
+
     @abstractmethod
     def run(self):
         pass
@@ -84,7 +87,10 @@ class ProcessController(BasicController):
 class BackupController(ProcessController):
     def __init__(self, disk, backup_id, config):
         super(BackupController, self).__init__(disk, backup_id, config)
-        self._disk_layout = DiskLayout.with_config(self.disk, self.backup_dir, config)
+        try:
+            self._disk_layout = DiskLayout.with_config(self.disk, self.backup_dir, config)
+        except Exception as e:
+            self._set_error(e)
         if self.config['overwrite']:
             self._remove_previous_backup()
         if not self.has_error_status():

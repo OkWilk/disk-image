@@ -48,7 +48,7 @@ class Mount(Resource):
             else:
                 return controller.get_status()['error_msg'], 500
         except Exception as e:
-            return 'Cannot mount backup, cause: ' + str(e), 400
+            return 'Cannot mount backup "' + str(backup_id) + '", Cause: ' + str(e), 400
 
     def delete(self, backup_id):
         if backup_id in _mounts.keys():

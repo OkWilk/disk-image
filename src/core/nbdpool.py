@@ -76,7 +76,8 @@ class _NBDPool:
                 self._used_nodes.append(node)
                 return node
             except IndexError:
-                raise
+                raise Exception("Not enough resources to mount all partitions of this backup. "
+                                "Unmount other backups and try again.")
 
     def release(self, node):
         with self._lock:

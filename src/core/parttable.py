@@ -63,7 +63,7 @@ class LayoutManagerFactory:
         if 'Error' in parted.output():
             self._logger.warning('Could not detect partition layout for the device /dev/' + disk +
                                  '. Cause: ' + parted.output())
-            raise DetectionException('Cannot detect partition layout for the ' + disk + '.')
+            raise DetectionException('Cannot detect partition layout for the ' + disk + '.\nCause: ' + parted.output())
         key, value = parted.output().split(':')
         if 'msdos' in value:
             return 'MBR'

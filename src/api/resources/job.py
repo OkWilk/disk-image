@@ -1,6 +1,9 @@
+from threading import Thread
+
 from flask_restful import Resource, abort, reqparse
-from core.controller import BackupController, RestorationController
+
 import constants
+from core.controller import BackupController, RestorationController
 from lib.exceptions import DetectionException
 
 BACKUP_OPERATION = 'Backup'
@@ -108,6 +111,12 @@ class Job(Resource):
         if status == constants.STATUS_FINISHED or status == constants.STATUS_ERROR:
             _jobs.pop(job_id)
             return 'OK', 200
-        else:  # TODO: allow terminating jobs and deleting them.
-            return 'Cannot abort job at this moment.', 400
+        else:
+            try:
+                ctrl = _jobs[job_id]['controller']
+                t = Thread(target=ctrl.kill)
+                t.start()
+                return 'Please wait, while the job is being cancelled.', 202
+            except:
+                return 'Cannot abort job at this moment.', 400
 

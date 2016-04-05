@@ -42,6 +42,7 @@ class PartitionImage:
         self.disk = disk
         self.backupset = backupset
         self.path = path
+        self.killed = False
         self.config = {
             'overwrite': overwrite,
             'rescue': rescue,
@@ -77,9 +78,10 @@ class PartitionImage:
     def backup(self):
         """Creates image backup for each of the partitions on the designated drive"""
         for partition in self.backupset.partitions:
-            self._prepare_partition_info(partition)
-            self._runner = self._get_backup_runner()
-            self._run_process()
+            if not self.killed:
+                self._prepare_partition_info(partition)
+                self._runner = self._get_backup_runner()
+                self._run_process()
 
     def restore(self):
         """Restores image backups to the designated drive"""
@@ -87,6 +89,12 @@ class PartitionImage:
             self._prepare_partition_info(partition)
             self._runner = self._get_restoration_runner()
             self._run_process()
+
+    def kill(self):
+        self.killed = True
+        # self._get_partition_status(self._current_partition)['status'] = constants.STATUS_ERROR
+        if self._runner:
+            self._runner.kill()
 
     def _prepare_partition_info(self, partition):
         self._current_partition = self.disk + partition.id
@@ -114,6 +122,8 @@ class PartitionImage:
                 retry = True
             except Exception as e:
                 self._get_partition_status(self._current_partition)['status'] = constants.STATUS_ERROR
+                if self.killed:
+                    raise Exception('Operation interrupted by the user.')
                 raise Exception(
                         'Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
 
