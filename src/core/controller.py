@@ -205,7 +205,7 @@ class RestorationController(ProcessController):
         except Exception as e:
             self._set_error(e)
             if self.backupset.compressed:
-                self._imager._runner.kill()
+                self._imager.kill()
         finally:
             self._status['end_time'] = datetime.today().strftime(constants.DATE_FORMAT)
             if self.backupset.compressed:
@@ -228,20 +228,40 @@ class MountController(BasicController):
         super(MountController, self).__init__(backup_id)
         self.nodes = []
         self.backupset = Backupset.load(backup_id)
+        self.squash_wrapper = None
         self.mount_path = ConfigHelper.config['Node']['Mount Path'] + self.backupset.id + '/'
 
     def mount(self):
-        create_dir(self.mount_path)
-        self._mount_partitions()
-        self._status['status'] = constants.STATUS_RUNNING
-        if not self._is_mounted_correctly():
-            self._release_nodes()
-            delete_dir(self.mount_path)
+        try:
+            self._squashfs_mount()
+            create_dir(self.mount_path)
+            self._mount_partitions()
+            self._status['status'] = constants.STATUS_RUNNING
+            if not self._is_mounted_correctly():
+                self._release_nodes()
+                delete_dir(self.mount_path)
+                self._squashfs_umount()
+        except:
+            self._squashfs_umount()
+            raise
 
     def unmount(self):
-        if self._can_unmount():
+        try:
             self._release_nodes()
-        delete_dir(self.mount_path)
+            delete_dir(self.mount_path)
+        except:
+            raise
+        finally:
+            self._squashfs_umount()
+
+    def _squashfs_mount(self):
+        if not self.squash_wrapper and self.backupset.compressed:
+            self.squash_wrapper = SquashfsWrapper(self.backupset)
+            self.squash_wrapper.mount()
+
+    def _squashfs_umount(self):
+        if self.backupset.compressed and self.squash_wrapper and self.squash_wrapper.mounted:
+            self.squash_wrapper.umount()
 
     def _mount_partitions(self):
         for partition in self.backupset.partitions:
@@ -272,6 +292,3 @@ class MountController(BasicController):
             node.unmount()
             self.NODE_POOL.release(node)
         del self.nodes[:]
-
-    def _can_unmount(self): # TODO: implement code to check if mounted resource is busy
-        return True

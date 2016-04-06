@@ -1,4 +1,4 @@
-import constants
+from services.config import ConfigHelper
 from os import path, mkdir, remove
 from shutil import rmtree
 from .runcommand import Execute
@@ -11,7 +11,7 @@ class SquashfsWrapper:
     def __init__(self, backupset):
         self.backupset = backupset
         self.mounted = False
-        self._backup_dir = constants.BACKUP_PATH + self.backupset.id + '/'
+        self._backup_dir = ConfigHelper.config['Node']['Backup Path'] + self.backupset.id + '/'
         self._mnt_dir = self._backup_dir + self.SQFS_MNT_DIR + '/'
 
     def mount(self):
