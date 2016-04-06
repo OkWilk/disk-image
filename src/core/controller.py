@@ -8,8 +8,6 @@ from logging import getLogger
 from os import path, makedirs, listdir
 from threading import Thread
 
-from jinja2.nodes import Concat
-
 import constants as constants
 from core.backupset import Backupset
 from core.diskdetect import DiskDetect
@@ -17,7 +15,7 @@ from core.image import PartitionImage
 from core.nbdpool import NBDPool
 from core.parttable import DiskLayout
 from core.sqfs import SquashfsWrapper
-from lib.exceptions import DiskImageException, ImageException
+from lib.exceptions import DiskImageException, BackupsetException
 from services.config import ConfigHelper
 from services.utils import delete_backup, delete_dir, create_dir
 
@@ -93,9 +91,13 @@ class BackupController(ProcessController):
             self._set_error(e)
         if self.config['overwrite']:
             self._remove_previous_backup()
-        if not self.has_error_status():
-            self._create_backupset()
-            self._imager = PartitionImage.with_config(self.disk, self.backup_dir, self.backupset, config)
+        if not self.config['overwrite'] and path.exists(self.backup_dir):
+            error_msg = "Some files for the backup with id '" + self.backup_id + "' already exist "\
+                            "and the overwrite option was not selected."
+            self._set_error(error_msg)
+            raise DiskImageException(error_msg)
+        self._create_backupset()
+        self._imager = PartitionImage.with_config(self.disk, self.backup_dir, self.backupset, config)
 
     def run(self):
         self._thread = Thread(target=self._backup)
@@ -105,8 +107,11 @@ class BackupController(ProcessController):
         try:
             backupset = Backupset.load(self.backup_id)
             delete_backup(backupset)
+        except BackupsetException as e:
+            pass
         except DiskImageException as e:
             self._set_error(str(e))
+            raise e
 
     def _init_status(self):
         self._status['operation'] = 'Backup'
@@ -139,6 +144,14 @@ class BackupController(ProcessController):
                 raise e
 
     def _create_backupset(self):
+        try:
+            backupset = Backupset.load(self.backup_id)
+            if not backupset.deleted:
+                error_msg = "Backup with the id '" + self.backup_id + "' already exists and is not marked for deletion."
+                self._set_error(error_msg)
+                raise DiskImageException(error_msg)
+        except BackupsetException:
+            pass
         disk_details = DiskDetect.get_disk_details(self.disk)
         self.backupset = Backupset(self.backup_id)
         self.backupset.disk_layout = self._disk_layout.get_layout()
@@ -146,6 +159,7 @@ class BackupController(ProcessController):
         self.backupset.compressed = self.config['compress']
         self.backupset.add_partitions(disk_details['partitions'])
         self.backupset.save()
+
 
     def _complete_backupset(self):
         self.backupset.status = self._status['status']

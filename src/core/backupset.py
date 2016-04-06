@@ -3,7 +3,7 @@ from services.config import ConfigHelper
 from services.database import DB
 from datetime import datetime
 
-from lib.exceptions import IllegalOperationException
+from lib.exceptions import BackupsetException, IllegalOperationException
 
 class Backupset:
 
@@ -29,7 +29,7 @@ class Backupset:
         if data:
             backupset = cls._from_json(data)
             return backupset
-        raise Exception('Could not retrieve backup information.')
+        raise BackupsetException('Could not retrieve backup information.')
 
     @classmethod
     def _from_json(cls, json):

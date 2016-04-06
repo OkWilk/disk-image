@@ -3,6 +3,10 @@ class DiskImageException(Exception):
     pass
 
 
+class BackupsetException(DiskImageException):
+    pass
+
+
 class IllegalOperationException(DiskImageException):
     pass
 

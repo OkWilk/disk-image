@@ -17,7 +17,7 @@ def delete_backup(backupset):
             raise IllegalOperationException("The requested backup resides on a different node. " +
                                             "Please use node: " + backupset.node + " for this backup overwrite.")
     else:
-        raise IllegalOperationException("A backup must be marked as ready for deletion before trying to overwrite it.")
+        raise IllegalOperationException("A backup must be marked as ready for deletion before overwriting it.")
 
 
 def _remove_backup_files(backupset):
