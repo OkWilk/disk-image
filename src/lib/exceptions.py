@@ -1,3 +1,8 @@
+"""
+Author:     Oktawiusz Wilk
+Date:       10/04/2016
+License:    GPL
+"""
 
 class DiskImageException(Exception):
     pass
@@ -20,9 +25,12 @@ class BackupOperationException(DiskImageException):
 
 
 class ImageException(DiskImageException):
-    """Raised in case of backup and restoration issues."""
     pass
 
 
 class DiskSpaceException(DiskImageException):
+    pass
+
+
+class MountException(DiskImageException):
     pass

@@ -1,20 +1,36 @@
-from services.config import ConfigHelper
+"""
+Author:     Oktawiusz Wilk
+Date:       10/04/2016
+License:    GPL
+"""
+
 from os import path, mkdir, remove
 from shutil import rmtree
+
+from services.config import ConfigHelper
 from .runcommand import Execute
 
 
 class SquashfsWrapper:
-    # TODO: add error handling
+    """
+    This class provides logic required to mount squashfs compressed images and create symlinks,
+    so that the generic code that handles partclone image mounting can be used.
+    """
     SQFS_MNT_DIR = 'sqfs_mnt'
 
     def __init__(self, backupset):
         self.backupset = backupset
         self.mounted = False
-        self._backup_dir = ConfigHelper.config['Node']['Backup Path'] + self.backupset.id + '/'
+        self._backup_dir = ConfigHelper.config['node']['backup_path'] + self.backupset.id + '/'
         self._mnt_dir = self._backup_dir + self.SQFS_MNT_DIR + '/'
 
     def mount(self):
+        """
+        Creates directory structure necessary for mounting of the squashfs images, mounts the image
+        and creates symlinks.
+        :return: None
+        :exception: Exception is raised if the backup directory does not exist.
+        """
         if path.exists(self._backup_dir):
             try:
                 mkdir(self._mnt_dir)
@@ -30,6 +46,11 @@ class SquashfsWrapper:
             Exception('Cannot open backup directory.')
 
     def umount(self):
+        """
+        Unmounts squashfs image, and removes symlinks and directory structure created by
+        the mount method.
+        :return: None
+        """
         for partition in self.backupset.partitions:
             self._image_prefix = 'part' + str(partition.id)
             self._remove_symlink(partition)

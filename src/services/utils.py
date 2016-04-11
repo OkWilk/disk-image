@@ -1,17 +1,31 @@
+"""
+Author:     Oktawiusz Wilk
+Date:       10/04/2016
+License:    GPL
+"""
+
 import logging
 from os import mkdir
 from shutil import rmtree
 from threading import Lock
 
+from humanize import naturalsize
+
 from core.backupset import Backupset
-from lib.exceptions import BackupOperationException, IllegalOperationException, DiskSpaceException
+from lib.exceptions import BackupOperationException, IllegalOperationException
 from .config import ConfigHelper
 from .database import DB
 
 
 def delete_backup(backupset):
+    """
+    Physically removes the backup files from the disk, for the backup described by the backupset.
+    If the backup resides on another node an exception will be raised.
+    :param backupset: an object of the Backupset class that describes the
+    :return: None
+    """
     if backupset.deleted:
-        if backupset.node == ConfigHelper.config['Node']['Name']:  # FIXME: This code will stop other nodes from deleting the backup files, it needs to be changed.
+        if backupset.node == ConfigHelper.config['node']['name']:
             _remove_backup_files(backupset)
         else:
             raise IllegalOperationException("The requested backup resides on a different node. " +
@@ -29,6 +43,11 @@ def _remove_backup_files(backupset):
 
 
 def create_dir(dir):
+    """
+    Creates a directory if it doesn't exist.
+    :param dir: directory name to be created.
+    :return: None
+    """
     try:
         mkdir(dir)
     except FileExistsError:
@@ -36,13 +55,24 @@ def create_dir(dir):
 
 
 def delete_dir(dir):
+    """
+    Removes a directory if it exists.
+    :param dir: directory name to be deleted.
+    :return: None
+    """
     try:
         rmtree(dir)
     except:
-        pass  # TODO: do something better here...
+        pass
 
 
 class _BackupRemover:
+    """
+    This class manages purging of the backups when DiskSpaceError is raised.
+    It will parse the partclone output containing the information about the remaining space
+    necessary and try to purge backups in the order from the oldest to the newest.
+    """
+
     MULTIPLIERS = {
         'kb': 1024,
         'mb': 1048576,
@@ -54,6 +84,12 @@ class _BackupRemover:
         self._logger = logging.getLogger(__name__)
 
     def handle_space_error(self, error_message):
+        """
+        Starts the procedure to clear the disk space required if possible.
+        :param error_message: the exact error message from the partclone containing the
+            information about the remaining disk space required to store backup.
+        :return: None
+        """
         details = self._parse_error_to_size(error_message)
         self._make_space(details['space_required'])
 
@@ -83,19 +119,19 @@ class _BackupRemover:
             remaining_space_required = space_required
             for backup in DB.get_backups_for_purging():
                 if remaining_space_required > 0:
-                    print(str(backup['backup_size']))
                     remaining_space_required -= int(backup['backup_size'])
                     purge_list.append(backup)
             if remaining_space_required > 0:
                 raise Exception('Unable to free up required disk space for backup. Remaining disk space required would be: '
-                                         + str(remaining_space_required))
+                                         + str(naturalsize(remaining_space_required)))
             for backup in purge_list:
                 self._logger.debug(str(backup['id']) + ': ' + str(backup['backup_size']))
                 self._purge_backup(backup)
-            self._logger.debug('Remaining_space_required: ' + str(remaining_space_required))
+            self._logger.debug('Remaining_space_required: ' + str(naturalsize(remaining_space_required)))
 
     def _purge_backup(self, backup):
         _remove_backup_files(Backupset.load(backup['id']))
 
 
+# Export as singleton.
 BackupRemover = _BackupRemover()

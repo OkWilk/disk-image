@@ -33,7 +33,7 @@ class ImageTest(unittest.TestCase):
         self.assertEqual('partclone.ext4', self.clone._fs_to_command['ext4'])
         self.assertEqual('partclone.hfsp', self.clone._fs_to_command['hfsplus'])
         self.assertEqual('partclone.hfsp', self.clone._fs_to_command['hfs+'])
-        self.assertEqual('partclone.hfsp', self.clone._fs_to_command['hfs'])
+        self.assertEqual('partclone.dd', self.clone._fs_to_command['hfs'])
         self.assertEqual('partclone.dd', self.clone._fs_to_command['raw'])
 
     def test_select_command_for_valid_fs(self):
@@ -81,12 +81,10 @@ class ImageTest(unittest.TestCase):
                            force=config['force'], refresh_delay=config['refresh_delay'],
                            compress=config['compress'])
 
-    @patch('src.core.image.logging')
-    def test_image_with_config_raises_on_missing_key(self, logger_mock):
+    def test_image_with_config_raises_on_missing_key(self):
         config = {'overwrite': True, 'random': False}
         with self.assertRaises(Exception):
             imager = image.PartitionImage.with_config('sdxx', '/tmp', self.BACKUPSET, config)
-        self.assertTrue(logger_mock.error.called)
 
     def assert_config(self, imager, overwrite, rescue, space_check, fs_check,
                       crc_check, force, refresh_delay, compress):
@@ -199,13 +197,13 @@ class PartcloneOutputParserTest(unittest.TestCase):
 
     def setUp(self):
         self.parser = image._PartcloneOutputParser()
+        self.parser._logger = Mock()
 
-    @patch('src.core.image.logging')
-    def test_check_for_errors(self, log_mock):
+    def test_check_for_errors(self):
         string = 'open target fail /tmp/part1.img: file exists (17)'
         with self.assertRaises(image.ImageException):
             self.parser._check_for_errors(string)
-        self.assertEqual(1, log_mock.error.call_count)
+        self.assertEqual(1, self.parser._logger.error.call_count)
 
     def test_parse(self):
         base_string = 'Elapsed: 00:01:22, Remaining: 00:01:20, Completed: 50.2%, '
@@ -228,6 +226,7 @@ class PartcloneOutputParserTest(unittest.TestCase):
             self.parser.parse('open target fail /tmp/part1.img: file exists (17)')
 
     def _parse_and_assert(self, string, elapsed, remaining, completed):
+        self.parser.parse('file system:')
         self.parser.parse(string)
         self.assertEqual({'elapsed': elapsed, 'remaining': remaining,
                           'completed': completed}, self.parser.output)

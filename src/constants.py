@@ -1,3 +1,8 @@
+"""
+Author:     Oktawiusz Wilk
+Date:       10/04/2016
+License:    GPL
+"""
 
 DATE_FORMAT = '%d/%m/%Y %H:%M:%S'
 
@@ -16,5 +21,7 @@ PARTITION_FILE_PREFIX = 'part'
 PARTITION_FILE_SUFFIX = '.img'
 
 # Interval Constants in seconds
+REFRESH_DELAY = 5
 METRIC_INTERVAL = 5
+DISK_IO_INTERVAL = 1
 BUSY_WAIT_INTERVAL = 0.01

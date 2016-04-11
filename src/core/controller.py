@@ -1,6 +1,9 @@
-"""Author: Oktawiusz Wilk
-Date: 30/11/2015
 """
+Author:     Oktawiusz Wilk
+Date:       10/04/2016
+License:    GPL
+"""
+
 import logging
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
@@ -21,6 +24,7 @@ from services.utils import delete_backup, delete_dir, create_dir
 
 
 class BasicController:
+    """ This class defines the common structure of all Controllers. """
     __metaclass__ = ABCMeta
 
     def __init__(self, backup_id):
@@ -33,9 +37,17 @@ class BasicController:
         }
 
     def get_status(self):
+        """
+        Returns the current status of the controller.
+        :return: dictionary describing the status.
+        """
         return self._status
 
     def has_error_status(self):
+        """
+        Allows checking whether an error is detected by the controller.
+        :return: True if error was detected, False otherwise.
+        """
         return self._status['status'] == constants.STATUS_ERROR
 
     def _set_error(self, msg):
@@ -44,13 +56,17 @@ class BasicController:
 
 
 class ProcessController(BasicController):
+    """
+    This class defines the common structure for Backup and Restoration controllers
+    which need to be executed on threads separate from the standard server response thread pool.
+    """
     __metaclass__ = ABCMeta
 
     def __init__(self, disk, backup_id, config):
         super(ProcessController, self).__init__(backup_id)
         self.disk = disk
         self.config = config
-        self.backup_dir = ConfigHelper.config['Node']['Backup Path'] + str(backup_id) + '/'
+        self.backup_dir = ConfigHelper.config['node']['backup_path'] + str(backup_id) + '/'
         self._thread = None
         self._imager = None
         self._disk_layout = None
@@ -65,16 +81,29 @@ class ProcessController(BasicController):
         })
 
     def get_status(self):
+        """
+        Returns the current status of the controller with the updated information
+        regarding the imaged partitions.
+        :return: dictionary describing the status.
+        """
         self._update_status()
         return self._status
 
     def kill(self):
+        """
+        Allows killing of the job in progress.
+        :return: None
+        """
         if self._imager:
             self._imager.kill()
         self._set_error("Job cancelled by the user.")
 
     @abstractmethod
     def run(self):
+        """
+        This template method allows starting the imaging procedures.
+        :return: None
+        """
         pass
 
     def _update_status(self):
@@ -83,25 +112,34 @@ class ProcessController(BasicController):
 
 
 class BackupController(ProcessController):
+    """ The controller used to manage a complete Backup procedure """
     def __init__(self, disk, backup_id, config):
         super(BackupController, self).__init__(disk, backup_id, config)
         try:
             self._disk_layout = DiskLayout.with_config(self.disk, self.backup_dir, config)
         except Exception as e:
-            self._set_error(e)
-        if self.config['overwrite']:
-            self._remove_previous_backup()
-        if not self.config['overwrite'] and path.exists(self.backup_dir):
-            error_msg = "Some files for the backup with id '" + self.backup_id + "' already exist "\
-                            "and the overwrite option was not selected."
-            self._set_error(error_msg)
-            raise DiskImageException(error_msg)
+            self._set_error(str(e))
+            raise DiskImageException(str(e))
+        self._handle_overwrite(self.config['overwrite'])
         self._create_backupset()
         self._imager = PartitionImage.with_config(self.disk, self.backup_dir, self.backupset, config)
 
     def run(self):
+        """
+        Starts the execution of the backup procedure on a separate thread.
+        :return: None
+        """
         self._thread = Thread(target=self._backup)
         self._thread.start()
+
+    def _handle_overwrite(self, overwrite):
+        if overwrite:
+            self._remove_previous_backup()
+        if not overwrite and path.exists(self.backup_dir):
+            error_msg = "Some files for the backup with id '" + self.backup_id + "' already exist "\
+                            "and the overwrite option was not selected."
+            self._set_error(error_msg)
+            raise DiskImageException(error_msg)
 
     def _remove_previous_backup(self):
         try:
@@ -139,19 +177,12 @@ class BackupController(ProcessController):
             try:
                 makedirs(self.backup_dir)
             except IOError as e:
-                logging.error('Cannot create path for backup: ' +
-                              self.backup_dir + '. Cause:' + str(e))
+                logging.error('Cannot create path for backup: ' + self.backup_dir +
+                              '. Cause:' + str(e))
                 raise e
 
     def _create_backupset(self):
-        try:
-            backupset = Backupset.load(self.backup_id)
-            if not backupset.deleted:
-                error_msg = "Backup with the id '" + self.backup_id + "' already exists and is not marked for deletion."
-                self._set_error(error_msg)
-                raise DiskImageException(error_msg)
-        except BackupsetException:
-            pass
+        self._raise_if_backupset_exists()
         disk_details = DiskDetect.get_disk_details(self.disk)
         self.backupset = Backupset(self.backup_id)
         self.backupset.disk_layout = self._disk_layout.get_layout()
@@ -160,30 +191,46 @@ class BackupController(ProcessController):
         self.backupset.add_partitions(disk_details['partitions'])
         self.backupset.save()
 
+    def _raise_if_backupset_exists(self):
+        try:
+            backupset = Backupset.load(self.backup_id)
+            if not backupset.deleted:
+                error_msg = "Backup with the id '" + self.backup_id + \
+                            "' already exists and is not marked for deletion."
+                self._set_error(error_msg)
+                raise DiskImageException(error_msg)
+        except BackupsetException:
+            pass
 
     def _complete_backupset(self):
         self.backupset.status = self._status['status']
-        self.backupset.backup_size = sum(path.getsize(self.backup_dir + f) for f in listdir(self.backup_dir))
+        self.backupset.backup_size = sum(path.getsize(self.backup_dir + file)
+                                         for file in listdir(self.backup_dir))
         self.backupset.save()
 
 
 class RestorationController(ProcessController):
-
+    """ The controller used to manage a complete Restoration procedure """
     def __init__(self, disk, backup_id, config):
         super(RestorationController, self).__init__(disk, backup_id, config)
         self.backupset = self._load_backupset()
-        self._disk_layout = DiskLayout.with_config(self.disk, self.backup_dir, config, self.backupset.disk_layout)
+        self._disk_layout = DiskLayout.with_config(self.disk, self.backup_dir, config,
+                                                   self.backupset.disk_layout)
         self._imager = PartitionImage.with_config(self.disk, self.backup_dir,
                                                   self.backupset, config)
 
     def _load_backupset(self):
         self.backupset = Backupset.load(self.backup_id)
-        if self.backupset.node == ConfigHelper.config['Node']['Name']:
+        if self.backupset.node == ConfigHelper.config['node']['name']:
             return self.backupset
         else:
             raise Exception('This backup resides on another node, terminating.')
 
     def run(self):
+        """
+        Starts the execution of the backup restoration procedure on a separate thread.
+        :return: None
+        """
         self._thread = Thread(target=self._restore)
         self._thread.start()
 
@@ -222,6 +269,7 @@ class RestorationController(ProcessController):
 
 
 class MountController(BasicController):
+    """ The controller used to manage mounting and unmounting procedures """
     NODE_POOL = NBDPool
 
     def __init__(self, backup_id):
@@ -229,9 +277,14 @@ class MountController(BasicController):
         self.nodes = []
         self.backupset = Backupset.load(backup_id)
         self.squash_wrapper = None
-        self.mount_path = ConfigHelper.config['Node']['Mount Path'] + self.backupset.id + '/'
+        self.mount_path = ConfigHelper.config['node']['mount_path'] + self.backupset.id + '/'
 
     def mount(self):
+        """
+        Creates the necessary directory structures and system links,
+        followed by mounting of the backup.
+        :return: None
+        """
         try:
             self._squashfs_mount()
             create_dir(self.mount_path)
@@ -246,6 +299,11 @@ class MountController(BasicController):
             raise
 
     def unmount(self):
+        """
+        Unmounts the backup followed by clean up of the directories
+        and system links created by backup function.
+        :return: None
+        """
         try:
             self._release_nodes()
             delete_dir(self.mount_path)
@@ -284,7 +342,8 @@ class MountController(BasicController):
         for node in self.nodes:
             if node.error and not error_detected:
                 error_detected = True
-                self._set_error("Error detected duirng the mount operation on backup " + str(self.backupset.id))
+                self._set_error("Error detected duirng the mount operation on backup " +
+                                str(self.backupset.id))
         return not error_detected
 
     def _release_nodes(self):

@@ -1,3 +1,9 @@
+"""
+Author:     Oktawiusz Wilk
+Date:       10/04/2016
+License:    GPL
+"""
+
 from threading import Thread
 
 import psutil
@@ -8,14 +14,22 @@ from .sysmon import MetricPlugin, ThreadedMetricPlugin
 
 
 class DiskSpacePlugin(MetricPlugin):
+    """
+    This plugin collects disk space utilisation, it does represent the percent of the disk
+    being used.
+    """
     NAME = 'DiskSpace'
     INDEX = 3
 
     def _collect_metric(self):
-        return psutil.disk_usage(ConfigHelper.config['Node']['Backup Path'])[self.INDEX]
+        return psutil.disk_usage(ConfigHelper.config['node']['backup_path'])[self.INDEX]
 
 
 class RAMUtilisationPlugin(MetricPlugin):
+    """
+    This plugin collects RAM utilisation, it does represent the percent of the memory
+    being used.
+    """
     NAME = 'RAM_Utilisation'
     INDEX = 2
 
@@ -24,6 +38,10 @@ class RAMUtilisationPlugin(MetricPlugin):
 
 
 class CpuUtilisationPlugin(ThreadedMetricPlugin):
+    """
+    This plugin collects CPU utilisation, it does represent the average processor usage over the
+    interval period in percents.
+    """
     NAME = 'CPU_Utilisation'
 
     def _run(self):
@@ -41,8 +59,12 @@ class CpuUtilisationPlugin(ThreadedMetricPlugin):
 
 
 class DiskIOUtilisationPlugin(ThreadedMetricPlugin):
+    """
+    This plugin collects the disk I/O utilisation, it does represent the average I/O
+    usage of the backup disk over the interval period in percents.
+    """
     NAME = 'Disk_IO_Utilisation'
-    COMMAND = ['iostat', '-x', '-d', str(ConfigHelper.config['Node']['Backup Disk'])]
+    COMMAND = ['iostat', '-x', '-d', str(ConfigHelper.config['node']['backup_disk'])]
 
     def _run(self):
         self._thread = Thread(target=self._collect_metric, daemon=True)
@@ -50,11 +72,15 @@ class DiskIOUtilisationPlugin(ThreadedMetricPlugin):
 
     @property
     def value(self):
+        """
+        Checks whether a new value is available and returns the up to date value of the metric.
+        :return: numerical value representing the percentage of the I/O utilisation.
+        """
         with self._lock:
             output = self._runner.output()
             if output:
                 self._value = output
-            return self._value
+            return float(self._value)
 
     def _collect_metric(self):
         self.COMMAND.append(str(self.interval))
@@ -62,11 +88,16 @@ class DiskIOUtilisationPlugin(ThreadedMetricPlugin):
         self._runner.run()
 
     def stop(self):
-        self.stop = True;
+        """
+        Stops the command that is executed in the background to collect the metric.
+        :return: None
+        """
+        self._stop = True
         self._runner.kill()
         self._thread.join()
 
 class _IOStatParser(OutputParser):
+    """ The output parser class for extracting I/O utilisation from the iostat command """
     def __init__(self):
         self.output = None
 

@@ -1,6 +1,9 @@
-"""Author: Oktawiusz Wilk
-Date: 06/11/2015
 """
+Author:     Oktawiusz Wilk
+Date:       10/04/2016
+License:    GPL
+"""
+
 import logging
 from abc import ABCMeta, abstractmethod
 from os import path
@@ -11,7 +14,8 @@ from .runcommand import Execute, OutputToFileConverter
 
 
 class DiskLayout:
-    def __init__(self, disk, target_dir, layout=None, overwrite: bool = False):
+    """ This class encapsulates the disk layout detection, backup and restoration procedures. """
+    def __init__(self, disk, target_dir, layout=None, overwrite=False):
         self.disk = disk
         self.target_dir = target_dir
         self.overwrite = overwrite
@@ -20,6 +24,14 @@ class DiskLayout:
 
     @classmethod
     def with_config(cls, disk, target_dir, config, layout=None):
+        """
+        Creates a DiskLayout object initialised with parameters from the configuration.
+        :param disk: string identifier of the disk for layout operations.
+        :param target_dir: directory to save and load files.
+        :param config: dictionary containing backup and restoration settings.
+        :param layout: disk layout, if no layout is provided it will be automatically detected.
+        :return: inistalised DiskLayout object.
+        """
         try:
             return cls(disk, target_dir, layout=layout, overwrite=config['overwrite'])
         except BaseException as e:
@@ -27,13 +39,26 @@ class DiskLayout:
             raise e
 
     def get_layout(self):
+        """
+        Returns the detected disk layout.
+        :return: string containing the disk layout abbreviation (e.g. MBR or GPT)
+        """
         return self._layout_manager.layout
 
     def backup_layout(self):
+        """
+        Creates a backup of the boot record and the partition layout.
+        :return: None
+        """
         self._check_if_disk_exists_with_raise()
         self._layout_manager.backup_layout()
 
     def restore_layout(self):
+        """
+        Restores an existing backup of disk layout and boot record to the disk.
+        Warning: This operation will destroy the previous disk layout on the disk.
+        :return: None
+        """
         self._check_if_disk_exists_with_raise()
         self._layout_manager.restore_layout()
 
@@ -43,10 +68,19 @@ class DiskLayout:
 
 
 class LayoutManagerFactory:
+    """ Factory implementation for provision of LayoutManagers. """
     def __init__(self):
         self._logger = logging.getLogger(__name__)
 
     def get_layout_manager(self, disk, target_dir, layout, overwrite):
+        """
+        Prepares and returns ready LayoutManager to be used by the DiskLayout wrapper.
+        :param disk: disk to be managed.
+        :param target_dir: directory to be used for storing and loading backups.
+        :param layout: disk layout, if None is provided, the layout will be detected.
+        :param overwrite: whether the existing layout backup should be overwritten
+        :return: initialised LayoutManager.
+        """
         if not layout:
             layout = self._detect_layout(disk)
         if 'MBR' in layout:
@@ -63,7 +97,7 @@ class LayoutManagerFactory:
         if 'Error' in parted.output():
             self._logger.warning('Could not detect partition layout for the device /dev/' + disk +
                                  '. Cause: ' + parted.output())
-            raise DetectionException('Cannot detect partition layout for the ' + disk + '.\nCause: ' + parted.output())
+            raise DetectionException('Cannot detect partition layout for the ' + disk + '. Cause: ' + parted.output().strip())
         key, value = parted.output().split(':')
         if 'msdos' in value:
             return 'MBR'
@@ -74,6 +108,7 @@ class LayoutManagerFactory:
 
 
 class LayoutManager:
+    """ This class provides a common structure for the strategy pattern. """
     __metaclass__ = ABCMeta
     MBR_SIZE = 512
     MBR_TARGET_FILE = 'mbr.img'
@@ -89,10 +124,18 @@ class LayoutManager:
 
     @abstractmethod
     def backup_layout(self):
+        """
+        Template method for backing up of the detected layout.
+        :return: None
+        """
         pass
 
     @abstractmethod
     def restore_layout(self):
+        """
+        Template method for restoring of the previous layout backup.
+        :return: None
+        """
         pass
 
     def _remove_previous_partition_tables(self):
@@ -130,6 +173,9 @@ class LayoutManager:
 
 
 class MBRLayoutManager(LayoutManager):
+    """
+    This class provides implementation of backup and restore functions for the MS-DOS layout (MBR).
+    """
     def __init__(self, disk, target_dir, overwrite):
         super(MBRLayoutManager, self).__init__(disk, target_dir, overwrite)
         self.layout = 'MBR'
@@ -193,6 +239,9 @@ class MBRLayoutManager(LayoutManager):
 
 
 class GPTLayoutManager(LayoutManager):
+    """
+    This class provides implementation of backup and restoration procedures for GPT layout.
+    """
     def __init__(self, disk, target_dir, overwrite):
         super(GPTLayoutManager, self).__init__(disk, target_dir, overwrite)
         self.layout = 'GPT'

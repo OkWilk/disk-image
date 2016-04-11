@@ -1,7 +1,18 @@
+"""
+Author:     Oktawiusz Wilk
+Date:       10/04/2016
+License:    GPL
+"""
+
 from threading import Thread
 
 
 class ExtendedThread(Thread):
+    """
+    This class wraps the standard Thread from the Python threading library to add a callback
+    function in case of exception being raised on the thread. With the callback method is provided
+    the thread can pass the exception object to the parent thread to notify it about the error.
+    """
 
     def __init__(self, exception_callback=None, *args, **kwargs):
         self._callback = exception_callback

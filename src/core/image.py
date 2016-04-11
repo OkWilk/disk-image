@@ -1,17 +1,21 @@
-"""Author: Oktawiusz Wilk
-Date: 05/11/2015
 """
+Author:     Oktawiusz Wilk
+Date:       10/04/2016
+License:    GPL
+"""
+
 import logging
 from os import path, remove
 
 import constants
 from lib.exceptions import ImageException, DiskSpaceException
+from services.utils import BackupRemover
 from .backupset import Backupset
 from .runcommand import OutputParser, Execute
-from services.utils import BackupRemover
+
 
 class PartitionImage:
-    """A wrapper for the Open Source partition imaging tool partclone
+    """A wrapper class for the Open Source partition imaging tool partclone
     (http://partclone.org/) and read only compressed file system squashfs.
     This class can be used to setup, start and monitor imaging procedure for
     file systems supported by partclone project.
@@ -61,6 +65,16 @@ class PartitionImage:
 
     @classmethod
     def with_config(cls, disk: str, path: str, backupset: 'Backupset', config: dict):
+        """
+        Creates an instance of PartitionImage class with configuration being read from
+        the provided config dictionary.
+        :param disk: string identifier of the string to be imaged.
+        :param path: backup path to be used.
+        :param backupset: a valid and initialised backupset object.
+        :param config: a dictionary containing all the fields specified in the PartitionImage
+            constructor.
+        :return: initialised PartitionImage object.
+        """
         try:
             return cls(disk, path, backupset, config['overwrite'], config['rescue'],
                        config['space_check'], config['fs_check'],
@@ -71,12 +85,18 @@ class PartitionImage:
             raise e
 
     def get_status(self):
-        """Returns updated status for the executed process."""
+        """
+        Returns updated status for the executed process.
+        :return: dictionary with status for imaged partitions.
+        """
         self._update_status()
         return self._status
 
     def backup(self):
-        """Creates image backup for each of the partitions on the designated drive"""
+        """
+        Creates image backup for each of the partitions on the designated drive
+        :return: None
+        """
         for partition in self.backupset.partitions:
             if not self.killed:
                 self._prepare_partition_info(partition)
@@ -84,15 +104,22 @@ class PartitionImage:
                 self._run_process()
 
     def restore(self):
-        """Restores image backups to the designated drive"""
+        """
+        Restores image backups to the designated drive
+        :return: None
+        """
         for partition in self.backupset.partitions:
             self._prepare_partition_info(partition)
             self._runner = self._get_restoration_runner()
             self._run_process()
 
     def kill(self):
+        """
+        Allows killing of the running imaging procedure and automatically cancels
+        imaging of any partitions that are left.
+        :return: None
+        """
         self.killed = True
-        # self._get_partition_status(self._current_partition)['status'] = constants.STATUS_ERROR
         if self._runner:
             self._runner.kill()
 
@@ -116,7 +143,6 @@ class PartitionImage:
                     raise ImageException('The device ' + self._current_device + ' is unavailable.')
             except DiskSpaceException as e:
                 BackupRemover.handle_space_error(e)
-                print(str(self._current_image_file))
                 if path.exists(self._current_image_file):
                     remove(self._current_image_file)
                 retry = True
@@ -124,8 +150,8 @@ class PartitionImage:
                 self._get_partition_status(self._current_partition)['status'] = constants.STATUS_ERROR
                 if self.killed:
                     raise Exception('Operation interrupted by the user.')
-                raise Exception(
-                        'Error detected during imaging partition: ' + self._current_partition + '. Cause: ' + str(e))
+                raise Exception('Error detected during imaging partition: ' +
+                                self._current_partition + '. Cause: ' + str(e))
 
     def _init_status(self):
         """Initializes the status information with all partitions detected for
@@ -171,11 +197,13 @@ class PartitionImage:
         return Execute(command, _PartcloneOutputParser(), use_pty=True)
 
     def _backup_command(self, source: str, target: str, fs: str):
-        """Creates a backup command for specified partition
-        source - the partition to be imaged eg. /dev/sdb1
-        target - file for partition image eg. /tmp/part1.img
-        fs - filesystem to be imaged, this is used to select appropriate
+        """
+        Creates a backup command for specified partition
+        :param source: the partition to be imaged eg. /dev/sdb1
+        :param target: file for partition image eg. /tmp/part1.img
+        :param fs: filesystem to be imaged, this is used to select appropriate
              partclone version.
+        :return: command ready to be used with the Execute class
         """
         command = self._build_command(source, target, fs)
         command.append('-c')  # create backup
@@ -190,11 +218,13 @@ class PartitionImage:
                 ' '.join(self._backup_command(source, '-', fs)) + '\'']
 
     def _restore_command(self, source: str, target: str, fs: str):
-        """Creates a restore command for specified partition
-        source - the file containing partition image eg. /tmp/part1.img
-        target - the partition for the image to be applied to eg. /dev/sdb1
-        fs - filesystem to be imaged, this is used to select appropriate
+        """
+        Creates a restore command for specified partition
+        :param source: the file containing partition image eg. /tmp/part1.img
+        :param target: the partition for the image to be applied to eg. /dev/sdb1
+        :param fs:  filesystem to be imaged, this is used to select appropriate
              partclone version.
+        :return: restoration command ready to be used with the Execute class
         """
         command = self._build_command(source, target, fs)
         command.append('-r')  # restore backup
@@ -251,6 +281,10 @@ class PartitionImage:
 
 
 class _PartcloneOutputParser(OutputParser):
+    """
+     A specialised class for output parsing of the partclone command, its main responsibility
+     is to extract progress information, and handle any errors printed in the partclone's output.
+    """
     _VALID_KEYS = ['elapsed', 'remaining', 'completed']
     ERROR_MAPPING = {
         "destination doesn't have enough free space": 'Not enough free space on the destination disk.',
@@ -270,7 +304,11 @@ class _PartcloneOutputParser(OutputParser):
         self._skip = True
 
     def parse(self, data):
-        """Processes data from the command output and saves the result as output."""
+        """
+        Processes data from the command output and saves the result as output.
+        :param data: raw output coming from the partclone command
+        :return: None
+        """
         raw_output = data.replace("\x1b[A", "").lower()
         str_out = str(raw_output).strip()
         if 'remaining:' not in str_out and 'complete:' not in str_out:
@@ -293,13 +331,19 @@ class _PartcloneOutputParser(OutputParser):
             if 'file system:' in str_out:
                 self._skip = False
 
-    def _check_for_errors(self, string):
-        """Tests the output string for error messages and processes them."""
-        string = string.lower()
-        if "destination doesn't have enough free space" in string:
-            raise DiskSpaceException(string)
+    def _check_for_errors(self, line):
+        """
+        Tests the output string for error messages and processes them.
+        :param line: a single line of the output to be checked for known error messages.
+        :return: None
+        :exception: DiskSpaceException is raised with the exact line if detected,
+            otherwise an exception mapped to the error will be thrown if an error is detected.
+        """
+        line = line.lower()
+        if "destination doesn't have enough free space" in line:
+            raise DiskSpaceException(line)
         for error in self.ERROR_MAPPING:
-            self._find_and_raise(string, error, message=self.ERROR_MAPPING[error])
+            self._find_and_raise(line, error, message=self.ERROR_MAPPING[error])
 
     def _find_and_raise(self, string, target, message):
         if target in string:
