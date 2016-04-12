@@ -141,7 +141,7 @@ class Job(Resource):
         else:
             try:
                 ctrl = self._jobs[job_id]['controller']
-                t = Thread(target=ctrl.kill)
+                t = Thread(target=ctrl.kill, daemon=True)
                 t.start()
                 return 'Please wait, while the job is being cancelled.', 202
             except:
