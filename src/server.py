@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 """
 Author:     Oktawiusz Wilk
 Date:       10/04/2016
@@ -17,7 +19,7 @@ from api.resources.mount import Mount
 
 logging .basicConfig(level=logging.DEBUG,
                      format='%(asctime)s [%(name)s][%(levelname)s]: %(message)s',
-                     filename='server.log',
+                     filename='/var/log/diskimage/node.log',
                      filemode='w')
 log = logging.getLogger('werkzeug').setLevel(logging.WARNING)  # Suppress HTTP request logging
 
