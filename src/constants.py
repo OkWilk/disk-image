@@ -3,6 +3,7 @@ Author:     Oktawiusz Wilk
 Date:       10/04/2016
 License:    GPL
 """
+VERSION = '1.0'
 
 DATE_FORMAT = '%d/%m/%Y %H:%M:%S'
 

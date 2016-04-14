@@ -9,6 +9,7 @@ from threading import RLock
 
 from pymongo import ASCENDING
 
+import constants
 from .config import ConfigHelper
 from .mdbconnector import MongoConnector, to_list
 
@@ -60,6 +61,14 @@ class Database:
         """
         pass
 
+    @abstractclassmethod
+    def remove_zombie_backups(self):
+        """
+        Removes "running" backups after Node restarts and crashes.
+        :return: None
+        """
+        pass
+
 
 class MongoDB(Database):
     """ The specific implementation of the Database interface for the MongoDB """
@@ -86,6 +95,12 @@ class MongoDB(Database):
                                                'deleted': True,
                                                'purged': False}).sort('creation_date', ASCENDING))
 
+    def remove_zombie_backups(self):
+        with self._lock:
+            with MongoConnector(self.config) as db:
+                db.backup.update({'node': ConfigHelper.config['node']['name'],
+                                  'status': constants.STATUS_RUNNING},
+                                 {'$set': {'status': constants.STATUS_ERROR}})
 
 # Export a ready Database client as a singleton.
 DB = MongoDB(ConfigHelper.config['database'])
